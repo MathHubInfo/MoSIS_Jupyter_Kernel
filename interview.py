@@ -339,24 +339,35 @@ class Interview(cmd.Cmd):
             self.trigger('parameters_parsed')
             return
 
-        parameter_name = re.split('\W+', userstring, 1)[0]
+        parameter_name = self.get_first_word(userstring)
 
+        # create mmt theory
+        self.new_theory(parameter_name)
+
+        #todo sanitize userstring
+        reply_pconstant = self.mmtinterface.mmt_new_decl("param", parameter_name, userstring)
+        if not reply_pconstant.ok:  # TODO
+            self.please_repeat()
+            return
+        print(reply_pconstant.tostring())
         self.simdata["parameters"][parameter_name] = {
             "theoryname": "" + parameter_name,
             "string": userstring,
             "type": self.get_type(userstring),
         }
         subdict = self.simdata["parameters"][parameter_name]
-        # create mmt theory
-        mmtparsed = self.new_theory(subdict["theoryname"]).ok
+        mmtparsed = reply_theory_created.ok
 
-        if mmtparsed and not self.cheating: #theory parameter seems to not exist
+        #create view
+        if mmtparsed: #and not self.cheating: #theory parameter seems to not exist
             mmtparsed = self.new_view(subdict)
             mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("ptype", subdict["viewname"],
-                                                                 "paramtype = " + subdict["type"]).ok  # TODO
-        #TODO create view
+                                                                 "ptype = " + subdict["type"]).ok  # TODO
+            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("ptype", subdict["viewname"],
+                                                                 "param = " + parameter_name).ok  # TODO
+
         if mmtparsed:
-            # self.poutput ("Ok, " +  userstring)
+            self.poutput ("Ok, " +  userstring)
             if self.please_prompt("Are these all the parameters?"):
                 self.trigger('parameters_parsed')
         else:
@@ -427,7 +438,7 @@ class Interview(cmd.Cmd):
     def means_no(self, answer):
         try:
             ret = strtobool(answer)
-            if (ret == False):
+            if ret == False:
                 return True
         except ValueError:
             return False
@@ -436,19 +447,6 @@ class Interview(cmd.Cmd):
     def obviously_stupid_input(self):
         self.poutput("Trying to be funny, huh?")
 
-    # string processing
-    def has_equals(self, string):
-        if string.find("=") > -1:
-            return True
-        return False
-
-    def has_colon(self, string):
-        if string.find(":") > -1:
-            return True
-        return False
-
-    def eq_to_doteq(self, string):
-        return string.replace("=", "≐")
 
     ### mmt input helper functions
     def include_in(self, in_which_theory, what):
@@ -476,10 +474,14 @@ class Interview(cmd.Cmd):
         dictentry["viewname"] = self.construct_current_view_name(dictentry)
         # self.poutput("new view: "+dictentry["viewname"])
         ok = self.mmtinterface.mmt_new_view(dictentry["viewname"], self.viewfrom[self.state], dictentry["theoryname"])
-        # recursively look for all views already done and include them
+        # recursively look for all views already done and try to include them
         for viewstring in self.get_recursively(self.simdata, "viewname"):
             if (dictentry["viewname"] != viewstring) and ok:
-                ok = self.include_in(dictentry["viewname"], "?" + re.split('AS', viewstring)[-1] + " = " + "?" + viewstring)
+                try:
+                    ok = self.include_in(dictentry["viewname"], "?" + re.split('AS', viewstring)[-1] + " = " + "?" + viewstring)
+                except MMTServerError as error:
+                    if error.args[0].find("no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" + "?" + re.split('AS', viewstring)[-1] + "?[") < 0:
+                        print(error.args)
         return ok
 
     def construct_current_view_name(self, dictentry):
@@ -488,57 +490,7 @@ class Interview(cmd.Cmd):
     def construct_view_name(self, dictentry, state):
         return dictentry["theoryname"] + "AS" + (self.viewfrom[state])
 
-    # cf. https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
-    def get_recursively(self, search_dict, field):
-        """
-        Takes a dict with nested lists and dicts, and searches all dicts for a key of the field provided.
-        """
-        fields_found = []
-        for key, value in search_dict.items():
-            if key == field:
-                fields_found.append(value)
-            elif isinstance(value, dict):
-                results = self.get_recursively(value, field)
-                for result in results:
-                    fields_found.append(result)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        more_results = self.get_recursively(item, field)
-                        for another_result in more_results:
-                            fields_found.append(another_result)
-        return fields_found
 
-    def insert_type(self, string, whichtype):
-        eqidx = string.find("=")
-        if eqidx < 0:
-            raise Exception
-        if not self.has_colon(string):
-            # print('has no colon ' + equidx)
-            return string[:eqidx] + " : " + whichtype + " ❘ " + string[eqidx:]
-        return string[:eqidx] + " ❘ " + string[eqidx:]
-
-    def get_type(self, string):
-        colidx = string.find(":")
-        eqidx = string.find("=")
-        if eqidx > -1:
-            return string[colidx + 1:eqidx]
-        return string[colidx + 1:]
-
-    def insert_before_def(self, string, insertstring):
-        eqidx = string.find("=")
-        if eqidx < 0:
-            raise Exception
-        return string[:eqidx + 1] + " " + insertstring + " " + string[eqidx + 1:]
-
-    def get_first_word(self, string):
-        return re.split('\W+', string, 1)[0]
-
-    def get_last_type(self, string):
-        return re.split('[→ \s]', string)[-1]
-
-    def print_empty_line(self):
-        self.poutput("\n")
 
     ############# input processing if not explain or undo
     def default(self, line):
@@ -614,6 +566,89 @@ class Interview(cmd.Cmd):
                                                                   "Let's set up a simulation together.\n")
         self.trigger("greeting_over")
 
+
+# cf. https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
+def get_recursively(self, search_dict, field):
+    """
+    Takes a dict with nested lists and dicts, and searches all dicts for a key of the field provided.
+    """
+    fields_found = []
+    for key, value in search_dict.items():
+        if key == field:
+            fields_found.append(value)
+        elif isinstance(value, dict):
+            results = self.get_recursively(value, field)
+            for result in results:
+                fields_found.append(result)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    more_results = self.get_recursively(item, field)
+                    for another_result in more_results:
+                        fields_found.append(another_result)
+    return fields_found
+
+
+# """string modification functions"""
+def insert_type(string, whichtype):
+    eqidx = string.find("=")
+    if eqidx < 0:
+        raise Exception
+    if not self.has_colon(string):
+        # print('has no colon ' + equidx)
+        return string[:eqidx] + " : " + whichtype + " ❘ " + string[eqidx:]
+    return string[:eqidx] + " ❘ " + string[eqidx:]
+
+
+def get_type(string):
+    colidx = string.find(":")
+    eqidx = string.find("=")
+    if eqidx > -1:
+        return string[colidx + 1:eqidx]
+    return string[colidx + 1:]
+
+
+def insert_before_def(string, insertstring):
+    eqidx = string.find("=")
+    if eqidx < 0:
+        raise Exception
+    return string[:eqidx + 1] + " " + insertstring + " " + string[eqidx + 1:]
+
+
+def get_first_word(string):
+    return re.split('\W+', string, 1)[0]
+
+
+def get_last_type(string):
+    return re.split('[→ \s]', string)[-1]
+
+
+def has_equals(self, string):
+    if string.find("=") > -1:
+        return True
+    return False
+
+
+def has_colon(self, string):
+    if string.find(":") > -1:
+        return True
+    return False
+
+
+def eq_to_doteq(self, string):
+    return string.replace("=", "≐")
+
+
+
+def print_empty_line():
+    self.poutput("\n")
+
+
+def add_ods(string):
+    objects = re.split('[:=]', string)
+    for i in range( 1, len(objects)-1 ):
+        objects[i] = "❘" + objects[i]
+    return ' '.join(objects)
 
 if __name__ == '__main__':
     Interview().cmdloop()

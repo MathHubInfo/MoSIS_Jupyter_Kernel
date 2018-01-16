@@ -48,7 +48,7 @@ class MMTReply:
                             raise MMTServerError(child.text)
                             return
         if not self.ok:
-            raise MMTServerError(elementToString(self.root))
+            raise MMTServerError(element_to_string(self.root))
 
     def getConstant(self, constantname):
         elements = self.getConstants()
@@ -92,9 +92,12 @@ class MMTReply:
                 # print("b: %s - %s - %s" % (b, b.text, b.get('value')))
                 return (a.get('value'), b.get('value'))
 
+    def tostring(self):
+        return element_to_string(self.root)
 
-def elementToString(element):
-    return (etree.tostring(element, pretty_print=True).decode('utf8'))
+
+def element_to_string(element):
+    return etree.tostring(element, pretty_print=True).decode('utf8')
 
 
 class MMTInterface:
