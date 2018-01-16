@@ -15,9 +15,11 @@ from requests.utils import quote
 from lxml import etree
 from openmath import openmath
 
+
 def run_mmt_server():
     subprocess.run(["/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar", "file", "server-interview.msl"])
-    # TODO keep alive
+    # TODO keep alive - or wait for jupyter kernel
+
 
 class MMTServerError(Exception):
     def __init__(self, err):
@@ -26,9 +28,14 @@ class MMTServerError(Exception):
 
 
 class MMTReply:
+    """An object that holds
+        ok : whether the request was successful and
+        root: the returned answer, usually an etree holding the xml reply"""
     def __init__(self, ok, root=None):
         self.ok = ok
         self.root = root
+#        print("creating reply")
+#        print(root)
         if isinstance(root, etree._Element):
             for element in root.iter():
             #for element in root.iter("div"): # why not entering this loop?
@@ -46,7 +53,6 @@ class MMTReply:
         elements = self.getConstants()
         #print ("elements: " + str(elements))
         for element in elements:
-            #print(element.get('name'))
             if element.get('name') == constantname:
                 return element
 

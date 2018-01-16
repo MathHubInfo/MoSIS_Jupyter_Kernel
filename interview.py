@@ -226,12 +226,11 @@ class Interview(cmd.Cmd):
                 mmtreply = self.mmtinterface.query_for( self.simdata[self.state]["theoryname"])
             except MMTServerError as error:
                 print(error.args)
-            mmtparsed = (mmtreply.ok if not self.cheating else True)
-            print("mmtparset "+ mmtparsed)
+            mmtparsed = (mmtreply.ok)# if not self.cheating else True)
         if mmtparsed:
             #(ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
             self.simdata[self.state]["name"] = domain_name
-            (fro, to) = mmtreply.getIntervalBoundaries(mmtreply, domain_name) if not self.cheating else (0., 1.)
+            (fro, to) = mmtreply.getIntervalBoundaries(mmtreply, domain_name) if not self.cheating else ("0.", "1.")
             self.simdata[self.state]["axes"]["x_1"] = "["+fro+";"+to+"]"
             #self.poutput(self.simdata[self.state]["axes"]["x_1"])
             (self.simdata[self.state]["from"],self.simdata[self.state]["to"]) = ("[ "+fro+" ]","[ "+to+" ]")
@@ -251,12 +250,13 @@ class Interview(cmd.Cmd):
 
     def domain_mmt_postamble(self):
         subdict = self.simdata[self.state]
-        self.mmtinterface.mmt_new_decl('mydomainpred', subdict["theoryname"], "myDomainPred = "+ subdict["name"] +".interval_pred")
-        self.mmtinterface.mmt_new_decl('mydomain', subdict["theoryname"], "myDomain = intervalType "+ subdict["name"])
-        #and a view to understand our interval as a domain -- view ephDomainAsDomain : ?GeneralDomains → ?ephDomain =
-        self.new_view(subdict)
-        self.mmtinterface.mmt_new_decl('Vecspace', subdict["viewname"], "Vecspace = real_lit")#TODO adjust for higher dimensions
-        self.mmtinterface.mmt_new_decl('DomainPred', subdict["viewname"], "DomainPred = "+ subdict["name"] +".interval_pred") # the . is unbound, apparently...
+        if not self.cheating:
+            self.mmtinterface.mmt_new_decl('mydomainpred', subdict["theoryname"], "myDomainPred = "+ subdict["name"] +".interval_pred")
+            self.mmtinterface.mmt_new_decl('mydomain', subdict["theoryname"], "myDomain = intervalType "+ subdict["name"])
+            #and a view to understand our interval as a domain -- view ephDomainAsDomain : ?GeneralDomains → ?ephDomain =
+            self.new_view(subdict)
+            self.mmtinterface.mmt_new_decl('Vecspace', subdict["viewname"], "Vecspace = real_lit")#TODO adjust for higher dimensions
+            self.mmtinterface.mmt_new_decl('DomainPred', subdict["viewname"], "DomainPred = "+ subdict["name"] +".interval_pred") # the . is unbound, apparently...
 
 ##### for state unknowns
     def unknowns_begin(self):
@@ -266,7 +266,7 @@ class Interview(cmd.Cmd):
     def unknowns_handle_input(self, userstring):
         unknown_name = re.split('\W+', userstring,1)[0]
         # replace interval with domain
-        parsestring = userstring.replace(self.simdata["domain"]["name"], "pred myDomainPred")
+        parsestring = (userstring.replace(self.simdata["domain"]["name"], "pred myDomainPred") if not self.cheating else userstring)
         #print(parsestring)
         #print('type: ' + str(self.get_last_type(self.get_type(parsestring))))
         self.simdata["unknowns"][unknown_name] = {
@@ -282,12 +282,12 @@ class Interview(cmd.Cmd):
         self.include_in(subdict["theoryname"], self.simdata["domain"]["theoryname"])
         #add unknown's type as constant
         twice = self.mmtinterface.mmt_new_decl(unknown_name, subdict["theoryname"], "myUnkType = " + self.simdata["unknowns"][unknown_name]["type"] ) #hacky!
-        twice = self.mmtinterface.mmt_new_decl('diffable', subdict["theoryname"], "anyuwillbediffable : {u : myUnkType} ⊦ twodiff u " ) #hacky!
-        mmtparsed = twice
+        twice = (self.mmtinterface.mmt_new_decl('diffable', subdict["theoryname"], "anyuwillbediffable : {u : myUnkType} ⊦ twodiff u " ) if not self.cheating else twice)
+        mmtparsed = twice.ok
         #add view
         if mmtparsed:
             mmtparsed = self.new_view(subdict)
-            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("codomain", subdict["viewname"], "ucodomain = ℝ" )
+            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("codomain", subdict["viewname"], "ucodomain = ℝ" ) #TODO
             mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("unktype", subdict["viewname"], "unknowntype = myUnkType" )
 
         if mmtparsed:
@@ -405,7 +405,7 @@ class Interview(cmd.Cmd):
     def obviously_stupid_input(self):
         self.poutput ("Trying to be funny, huh?")
 
-## string processing
+# string processing
     def has_equals(self, string):
         if string.find("=") > -1:
             return True
