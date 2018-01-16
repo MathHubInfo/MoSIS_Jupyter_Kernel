@@ -26,6 +26,8 @@ from mmtinterface import *
 class Interview(cmd.Cmd):
 
     def __init__(self, *args, **kwargs):
+        #just act like we were getting the right replies from MMT
+        self.cheating = True
         # initialize legal characters for cmd
         self.legalChars = u'!#$%.:;?@_-<>' + pp.printables + pp.alphas8bit + pp.punc8bit
         # TODO why does "<" not show?
@@ -83,19 +85,19 @@ class Interview(cmd.Cmd):
 
         #for ladder-like views
         self.viewfrom = OrderedDict([
-            ('domain', "?GeneralDomains"),
-            ('unknowns', "?Unknown"),
-            ('parameters', "?Parameter"),
-            ('pdes', "?PDE"),
-            ('bcs', "?BCsRequired"),
+            ('domain', "GeneralDomains"),
+            ('unknowns', "Unknown"),
+            ('parameters', "Parameter"),
+            ('pdes', "PDE"),
+            ('bcs', "BCsRequired"),
         ])
         # to include all the necessary theories every time
         self.bgthys = OrderedDict([
-            ('domain', ["?SimpleDomains", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
-            ('unknowns', ["http://mathhub.info/MitM/Foundation?Strings", "?ephdomain", "http://mathhub.info/MitM/smglom/calculus?higherderivative"]),
-            ('parameters', ["http://mathhub.info/MitM/smglom/arithmetics?realarith", "?ephdomain"]),
-            ('pdes', ["?DifferentialOperators"]),
-            ('bcs', ["?BCTypes", "?ephUnknown" , "?ephPDE" , "?linearity", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
+            ('domain', ["SimpleDomains", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]), # new: RealArithmetics
+            ('unknowns', ["http://mathhub.info/MitM/Foundation?Strings", "ephdomain", "http://mathhub.info/MitM/smglom/calculus?higherderivative"]),
+            ('parameters', ["http://mathhub.info/MitM/smglom/arithmetics?realarith", "ephdomain"]),
+            ('pdes', ["DifferentialOperators"]),
+            ('bcs', ["BCTypes", "ephUnknown" , "ephPDE" , "linearity", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
         ])
 
         #the things we'd like to find out
@@ -103,8 +105,8 @@ class Interview(cmd.Cmd):
             "num_dimensions" : None,
             "domain" : {
                     "name" : None,
-                    "uri"  : None,
-                    #"viewuri" : None,
+                    "theoryname"  : None,
+                    #"viewname" : None,
                     "axes" : OrderedDict(),
                     "from" : None,
                     "to" : None,
@@ -112,7 +114,7 @@ class Interview(cmd.Cmd):
             "unknowns" : OrderedDict(),
             "parameters" : {},
             "pdes" : {
-                "uri" : None,
+                "theoryname" : None,
                 "pdes" : [],
             },
             "bcs" : None,
@@ -126,31 +128,31 @@ class Interview(cmd.Cmd):
             "num_dimensions" : 1,
             "domain" : {
                     "name" : "Ω",
-                    "uri" : "?Omega",
+                    "theoryname" : "Omega",
                     "axes" : axes,# names and intervals
                     "from" : "[ 0 ]",
                     "to" : "[ 1 ]",
                 },
-            "unknowns" : {# names and uris #TODO OrderedDict
+            "unknowns" : {# names and theorynames #TODO OrderedDict
                     "u" : {
-                        "uri" : "?u",
+                        "theoryname" : "u",
                         "string" : "u : Ω → ℝ",
                         },
                 },
-            "parameters" : {# names and uris
+            "parameters" : {# names and theorynames
                     "μ" : {
-                        "uri" : "?mu",
+                        "theoryname" : "mu",
                         "string" : "μ : ℝ = 1",
                         },
                     "f" : {
-                        "uri" : "?f",
+                        "theoryname" : "f",
                         "string" : "f : Ω → ℝ = [x] x ⋅ x",
                     },
                 },
             "pdes" : {
                 "pdes" :  [
                             {# this is more of a wish list...
-                                "uri" : "?pde1",
+                                "theoryname" : "pde1",
                                 "string" : "μ ∆u = f(x_1)", # TODO
                                 "expanded" : "μ d²/dx_1² u = f(x_1)",
                                 "type" : "elliptic",
@@ -163,11 +165,13 @@ class Interview(cmd.Cmd):
             },
             "bcs" : [
                         {
+                            "theoryname" : "bc1",
                             "type" : "Dirichlet",
                             "string" : "u (0) = x_1**2",
                             "on" : "[0]",
                         },
                         {
+                            "theoryname" : "bc2",
                             "type" : "Dirichlet",
                             "string" : "u (1) = x_1**2",
                             "on" : "[1]",
@@ -212,16 +216,22 @@ class Interview(cmd.Cmd):
     def domain_handle_input(self, userstring):
         domain_name = re.split('\W+', userstring,1)[0]
         parsestring = userstring
-        mmtparsed = self.mmtinterface.mmt_new_decl(domain_name, self.simdata[self.state]["uri"], parsestring)
-        #mmtparsed = True
-        # TODO store result?
+        try:
+            mmtparsed = self.mmtinterface.mmt_new_decl(domain_name, self.simdata[self.state]["theoryname"], parsestring)
+        except MMTServerError as error:
+            print(error.args)
+        mmtparsed = (mmtparsed if not self.cheating else True)
         if mmtparsed:
-            mmtreply = MMTReply(self.mmtinterface, self.simdata[self.state]["uri"])
-            mmtparsed = mmtreply.ok
+            try:
+                mmtreply = self.mmtinterface.query_for( self.simdata[self.state]["theoryname"])
+            except MMTServerError as error:
+                print(error.args)
+            mmtparsed = (mmtreply.ok if not self.cheating else True)
+            print("mmtparset "+ mmtparsed)
         if mmtparsed:
-            #(ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["uri"])
+            #(ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
             self.simdata[self.state]["name"] = domain_name
-            (fro, to) = mmtreply.getIntervalBoundaries(mmtreply, domain_name)
+            (fro, to) = mmtreply.getIntervalBoundaries(mmtreply, domain_name) if not self.cheating else (0., 1.)
             self.simdata[self.state]["axes"]["x_1"] = "["+fro+";"+to+"]"
             #self.poutput(self.simdata[self.state]["axes"]["x_1"])
             (self.simdata[self.state]["from"],self.simdata[self.state]["to"]) = ("[ "+fro+" ]","[ "+to+" ]")
@@ -233,20 +243,20 @@ class Interview(cmd.Cmd):
         self.domain_mmt_postamble()
 
     def domain_mmt_preamble(self):
-        # set the current MMT URI for parsing the input TODO use right dimension
-        self.simdata[self.state]["uri"] = "?ephdomain"
-        #self.simdata[self.state]["viewuri"] = self.construct_current_view_name(self.simdata[self.state])
-        self.new_theory(self.simdata[self.state]["uri"])
-        #(ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["uri"])
+        # set the current MMT theoryname for parsing the input TODO use right dimension
+        self.simdata[self.state]["theoryname"] = "ephdomain"
+        #self.simdata[self.state]["viewname"] = self.construct_current_view_name(self.simdata[self.state])
+        self.new_theory(self.simdata[self.state]["theoryname"])
+        #(ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
 
     def domain_mmt_postamble(self):
         subdict = self.simdata[self.state]
-        self.mmtinterface.mmt_new_decl('mydomainpred', subdict["uri"], "myDomainPred = "+ subdict["name"] +".interval_pred")
-        self.mmtinterface.mmt_new_decl('mydomain', subdict["uri"], "myDomain = intervalType "+ subdict["name"])
+        self.mmtinterface.mmt_new_decl('mydomainpred', subdict["theoryname"], "myDomainPred = "+ subdict["name"] +".interval_pred")
+        self.mmtinterface.mmt_new_decl('mydomain', subdict["theoryname"], "myDomain = intervalType "+ subdict["name"])
         #and a view to understand our interval as a domain -- view ephDomainAsDomain : ?GeneralDomains → ?ephDomain =
         self.new_view(subdict)
-        self.mmtinterface.mmt_new_decl('Vecspace', subdict["viewuri"], "Vecspace = real_lit")#TODO adjust for higher dimensions
-        self.mmtinterface.mmt_new_decl('DomainPred', subdict["viewuri"], "DomainPred = "+ subdict["name"] +".interval_pred") # the . is unbound, apparently...
+        self.mmtinterface.mmt_new_decl('Vecspace', subdict["viewname"], "Vecspace = real_lit")#TODO adjust for higher dimensions
+        self.mmtinterface.mmt_new_decl('DomainPred', subdict["viewname"], "DomainPred = "+ subdict["name"] +".interval_pred") # the . is unbound, apparently...
 
 ##### for state unknowns
     def unknowns_begin(self):
@@ -260,25 +270,25 @@ class Interview(cmd.Cmd):
         #print(parsestring)
         #print('type: ' + str(self.get_last_type(self.get_type(parsestring))))
         self.simdata["unknowns"][unknown_name] = {
-                    "uri" : str("?" + unknown_name),
-                    #"viewuri" : self.construct_current_view_name(self.simdata[self.state]),
+                    "theoryname" : str("" + unknown_name),
+                    #"viewname" : self.construct_current_view_name(self.simdata[self.state]),
                     "string" : parsestring,
                     "type" : self.get_type(parsestring),
                 }
-        self.simdata["unknowns"][unknown_name]["viewuri"] = self.construct_current_view_name(self.simdata["unknowns"][unknown_name])
+        self.simdata["unknowns"][unknown_name]["viewname"] = self.construct_current_view_name(self.simdata["unknowns"][unknown_name])
         subdict = self.simdata["unknowns"][unknown_name]
         #create mmt theory with includes
-        once = self.new_theory(subdict["uri"])
-        self.include_in(subdict["uri"], self.simdata["domain"]["uri"])
+        once = self.new_theory(subdict["theoryname"])
+        self.include_in(subdict["theoryname"], self.simdata["domain"]["theoryname"])
         #add unknown's type as constant
-        twice = self.mmtinterface.mmt_new_decl(unknown_name, subdict["uri"], "myUnkType = " + self.simdata["unknowns"][unknown_name]["type"] ) #hacky!
-        twice = self.mmtinterface.mmt_new_decl('diffable', subdict["uri"], "anyuwillbediffable : {u : myUnkType} ⊦ twodiff u " ) #hacky!
+        twice = self.mmtinterface.mmt_new_decl(unknown_name, subdict["theoryname"], "myUnkType = " + self.simdata["unknowns"][unknown_name]["type"] ) #hacky!
+        twice = self.mmtinterface.mmt_new_decl('diffable', subdict["theoryname"], "anyuwillbediffable : {u : myUnkType} ⊦ twodiff u " ) #hacky!
         mmtparsed = twice
         #add view
         if mmtparsed:
             mmtparsed = self.new_view(subdict)
-            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("codomain", subdict["viewuri"], "ucodomain = ℝ" )
-            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("unktype", subdict["viewuri"], "unknowntype = myUnkType" )
+            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("codomain", subdict["viewname"], "ucodomain = ℝ" )
+            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("unktype", subdict["viewname"], "unknowntype = myUnkType" )
 
         if mmtparsed:
             self.poutput ("Ok, " +  userstring)
@@ -307,11 +317,11 @@ class Interview(cmd.Cmd):
 
         parameter_name = re.split('\W+', userstring,1)[0]
         self.simdata["parameters"][parameter_name] = {
-                    "uri" : "?" + parameter_name,
+                    "theoryname" : "" + parameter_name,
                     "string" : userstring,
                 }
         #create mmt theory
-        once = self.new_theory(self.simdata["parameters"][parameter_name]["uri"])
+        once = self.new_theory(self.simdata["parameters"][parameter_name]["theoryname"])
         mmtparsed = once
         #if mmtparsed:
             #create view
@@ -337,10 +347,10 @@ class Interview(cmd.Cmd):
     def pdes_handle_input(self, userstring):
         self.poutput ("pdeinput "+ userstring)
         #create mmt theory
-        self.simdata["pdes"]["uri"] = "?ephpde"
-        self.new_theory(self.simdata["pdes"]["uri"])
+        self.simdata["pdes"]["theoryname"] = "ephpde"
+        self.new_theory(self.simdata["pdes"]["theoryname"])
         #include unknowns, parameters, differential operators
-        inc = self.include_in(self.simdata["pdes"]["uri"], cuboidURI)
+        inc = self.include_in(self.simdata["pdes"]["theoryname"], cuboidtheoryname)
         # TODO send as declaration to mmt
         # TODO make view
 
@@ -363,7 +373,7 @@ class Interview(cmd.Cmd):
     def pdes_exit(self):
         self.poutput ("These are all the PDEs needed.")
 
-    # functions for user interaction
+### functions for user interaction
     def please_repeat(self, moreinfo=None):
         append = ""
         if moreinfo:
@@ -395,7 +405,7 @@ class Interview(cmd.Cmd):
     def obviously_stupid_input(self):
         self.poutput ("Trying to be funny, huh?")
 
-    # string processing
+## string processing
     def has_equals(self, string):
         if string.find("=") > -1:
             return True
@@ -411,32 +421,39 @@ class Interview(cmd.Cmd):
 
 ### mmt input helper functions
     def include_in(self, in_which_theory, what):
-        return self.mmtinterface.mmt_new_decl("inc", in_which_theory, "include " + what)
+        return self.mmtinterface.mmt_new_decl("inc", in_which_theory, "include " + self.assert_questionmark(what))
 
     def include_bgthys(self, in_which_theory):
         for bgthy in self.bgthys[self.state]:
             self.include_in(in_which_theory, bgthy)
 
+    def assert_questionmark(self, what):
+        qmidx = what.find("?")
+        if qmidx < 0:
+            return "?" + what
+        else:
+            return what
+
     def new_theory(self, thyname):
         self.mmtinterface.mmt_new_theory(thyname)
-        #(ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["uri"])
+        #(ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
         self.include_bgthys(thyname)
 
     def new_view(self, dictentry):
-        dictentry["viewuri"] = self.construct_current_view_name(dictentry)
-        #self.poutput("new view: "+dictentry["viewuri"])
-        ok = self.mmtinterface.mmt_new_view(dictentry["viewuri"], self.viewfrom[self.state], dictentry["uri"])
+        dictentry["viewname"] = self.construct_current_view_name(dictentry)
+        #self.poutput("new view: "+dictentry["viewname"])
+        ok = self.mmtinterface.mmt_new_view(dictentry["viewname"], self.viewfrom[self.state], dictentry["theoryname"])
         #recursively look for all views already done and include them
-        for viewstring in self.get_recursively(self.simdata, "viewuri"):
-            if(dictentry["viewuri"] != viewstring) and ok:
-                ok = self.include_in(dictentry["viewuri"], "?" + re.split('AS', viewstring)[-1] + " = " + viewstring)
+        for viewstring in self.get_recursively(self.simdata, "viewname"):
+            if(dictentry["viewname"] != viewstring) and ok:
+                ok = self.include_in(dictentry["viewname"], re.split('AS', viewstring)[-1] + " = " + viewstring)
         return ok
 
     def construct_current_view_name(self, dictentry):
         return self.construct_view_name(dictentry,self.state)
 
     def construct_view_name(self, dictentry, state):
-        return "?"+dictentry["uri"][1:] + "AS" + (self.viewfrom[state][1:])
+        return dictentry["theoryname"][1:] + "AS" + (self.viewfrom[state][1:])
 
     #cf. https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
     def get_recursively(self, search_dict, field):

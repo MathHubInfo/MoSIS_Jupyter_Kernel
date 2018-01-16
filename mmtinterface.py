@@ -5,6 +5,7 @@ import subprocess
 # mmt
 # extension info.kwarc.mmt.interviews.InterviewServer
 # server on 8080
+import _thread
 #TODO ask dennis on whether and how to delete modules
 
 # to do http requests
@@ -14,6 +15,10 @@ from requests.utils import quote
 from lxml import etree
 from openmath import openmath
 
+def run_mmt_server():
+    subprocess.run(["/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar", "file", "server-interview.msl"])
+    # TODO keep alive
+
 class MMTServerError(Exception):
     def __init__(self, err):
         self.error = err
@@ -21,18 +26,21 @@ class MMTServerError(Exception):
 
 
 class MMTReply:
-    def __init__(self, mmtinterface, theorypath):
-        # theorypath is relative for now
-        self.theorypath = theorypath
-        (self.ok, self.root) = mmtinterface.query_for(theorypath)
+    def __init__(self, ok, root=None):
+        self.ok = ok
+        self.root = root
+        if isinstance(root, etree._Element):
+            for element in root.iter():
+            #for element in root.iter("div"): # why not entering this loop?
+                #print("for element " + elementToString(element))
+                if (element.get('class')) == 'error':
+                    self.ok = False
+                    for child in element:
+                        if (child.get('class')) == 'message':
+                            raise MMTServerError(child.text)
+                            return
         if not self.ok:
-            raise MMTServerError(etree.tostring(self.root, pretty_print=True).decode())
-        for element in self.root.iter("div"):
-            if (element.get('class')) == 'error':
-                self.ok = False
-                for child in element:
-                    if (child.get('class')) == 'message':
-                        raise MMTServerError(child.text)
+            raise MMTServerError(elementToString(self.root))
 
     def getConstant(self, constantname):
         elements = self.getConstants()
@@ -54,7 +62,7 @@ class MMTReply:
         if element is not None:
             for child in element:
                 if (child.tag) == 'definition':
-                    #printElement(child)
+                    #print(elementToString(child))
                     return child
 
     def getType(self, constantname):
@@ -62,11 +70,10 @@ class MMTReply:
         if element is not None:
             for child in element:
                 if (child.tag) == 'type':
-                    #printElement(child)
+                    #print(elementToString(child))
                     return child
 
-#(probably volatile) accesses to concrete data structures
-#class InterviewHelper:
+#(probably very volatile) accesses to concrete data structures
     def getIntervalBoundaries (self, mmtreply, intervalname):
         child = mmtreply.getDefinition(intervalname)
         for oms in child.iter("{*}OMS"):
@@ -79,8 +86,8 @@ class MMTReply:
                 return (a.get('value'), b.get('value'))
 
 
-def printElement(element):
-    print (etree.tostring(element, pretty_print=True).decode())
+def elementToString(element):
+    return (etree.tostring(element, pretty_print=True).decode('utf8'))
 
 class MMTInterface:
     def __init__(self):
@@ -89,7 +96,11 @@ class MMTInterface:
         self.extension = ':interview'
         self.URIprefix = 'http://mathhub.info/'
         self.namespace = 'MitM/smglom/calculus' #TODO
-        self.debugprint = False
+        self.debugprint = True
+        try:
+            _thread.start_new_thread(run_mmt_server, ())
+        except:
+            print ("Error: unable to start mmt thread")
 
     def mmt_new_theory(self, thyname):
         #So, ich hab mal was zu MMT/devel gepusht. Es gibt jetzt eine Extension namens InterviewServer. Starten tut man die mit "extension info.kwarc.mmt.interviews.InterviewServer"
@@ -133,18 +144,17 @@ class MMTInterface:
             print(error)
             print("Are you sure the mmt server is running?")
             raise SystemExit
+        #print(req.text) if self.debugprint else 0
         if req.text.startswith('<'):
             root = etree.fromstring(req.text)
-            if root is not None:
-                printElement(root)
+        else:
+            root = None
         if req.status_code == 200:
-            return True
-        if not req.text.startswith('<'):
-            print(req.text)
-        return (False, req.text)
+            return MMTReply(True, root)
+        return MMTReply(False, root)
 
     def get_mpath(self, thyname):
-        mpath = self.URIprefix + self.namespace + thyname #TODO
+        mpath = self.URIprefix + self.namespace + "?" + thyname #TODO
         return mpath
 
     def query_for(self, thingname):
@@ -154,19 +164,19 @@ class MMTInterface:
         return self.http_qrequest(querycontent)
 
     def http_qrequest(self, data, message='/:query'):
-        #print(self.serverInstance + message)
+        print(self.serverInstance + message) if self.debugprint else 0
         session = requests.Session()
         adapter = requests.adapters.HTTPAdapter()
         session.mount('https://', adapter)
         session.mount('http://', adapter)
-        #print('\n' + str(data))
+        print('\n' + str(data)) if self.debugprint else 0
         binary_data = data.encode('UTF-8')
         headers = {'content-type': 'application/xml'}
         req = session.post((self.serverInstance + message), data=binary_data, headers=headers, stream=True)
         root = etree.fromstring(req.text)
         if req.status_code == 200:
-            return (True, root)
-        return (False, root)
+            return MMTReply(True, root)
+        return MMTReply(False, root)
 
 def add_dd(string):
     return string + "❙"
