@@ -123,7 +123,7 @@ class Interview(cmd.Cmd):
             "unknowns": OrderedDict(),
             "parameters": {},
             "pdes": {
-                "theoryname": None,
+ #               "theoryname": None,
                 "pdes": [],
             },
             "bcs": None,
@@ -218,7 +218,7 @@ class Interview(cmd.Cmd):
 
     ##### for state domain
     def domain_begin(self):
-        self.poutput("What is the domain you would like to simulate for?     Ω = [?;?]")
+        self.poutput("What is the domain you would like to simulate for?     Ω : type ❘ = [?;?]")
         self.poutput("By the way, you can always try and use LaTeX-type input.")
         self.simdata[self.state]["axes"] = OrderedDict()
         self.domain_mmt_preamble()
@@ -275,7 +275,7 @@ class Interview(cmd.Cmd):
     ##### for state unknowns
     def unknowns_begin(self):
         self.poutput("Which variable(s) are you looking for?   u : " + self.simdata["domain"][
-            "name"] + " → ?")  # problem: omega not a type (yet), need to have it look like one
+            "name"] + " → ℝ ?")  # problem: omega not a type (yet), need to have it look like one
         self.simdata["unknowns"] = OrderedDict()
 
     def unknowns_handle_input(self, userstring):
@@ -309,9 +309,9 @@ class Interview(cmd.Cmd):
         if mmtparsed:
             mmtparsed = self.new_view(subdict)
             mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("codomain", subdict["viewname"],
-                                                                     "ucodomain = ℝ")  # TODO
-            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("unktype", subdict["viewname"],
-                                                                     "unknowntype = myUnkType")
+                                                                     "ucodomain = ℝ").ok  # TODO
+            mmtparsed = mmtparsed and (self.mmtinterface.mmt_new_decl("unktype", subdict["viewname"],
+                                                                     "unknowntype = myUnkType").ok if not self.cheating else True)
 
         if mmtparsed:
             self.poutput("Ok, " + userstring)
@@ -335,20 +335,26 @@ class Interview(cmd.Cmd):
 
     def parameters_handle_input(self, userstring):
         # self.poutput ("parameterinput "+ userstring)
-        if (self.means_no(userstring)):
+        if self.means_no(userstring):
             self.trigger('parameters_parsed')
             return
 
         parameter_name = re.split('\W+', userstring, 1)[0]
+
         self.simdata["parameters"][parameter_name] = {
             "theoryname": "" + parameter_name,
             "string": userstring,
+            "type": self.get_type(userstring),
         }
+        subdict = self.simdata["parameters"][parameter_name]
         # create mmt theory
-        once = self.new_theory(self.simdata["parameters"][parameter_name]["theoryname"])
-        mmtparsed = once
-        # if mmtparsed:
-        # create view
+        mmtparsed = self.new_theory(subdict["theoryname"]).ok
+
+        if mmtparsed and not self.cheating: #theory parameter seems to not exist
+            mmtparsed = self.new_view(subdict)
+            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("ptype", subdict["viewname"],
+                                                                 "paramtype = " + subdict["type"]).ok  # TODO
+        #TODO create view
         if mmtparsed:
             # self.poutput ("Ok, " +  userstring)
             if self.please_prompt("Are these all the parameters?"):
@@ -369,12 +375,11 @@ class Interview(cmd.Cmd):
         self.simdata["pdes"]["pdes"] = []
 
     def pdes_handle_input(self, userstring):
-        self.poutput("pdeinput " + userstring)
         # create mmt theory
         self.simdata["pdes"]["theoryname"] = "ephpde"
         self.new_theory(self.simdata["pdes"]["theoryname"])
         # include unknowns, parameters, differential operators
-        inc = self.include_in(self.simdata["pdes"]["theoryname"], cuboidtheoryname)
+        #inc = self.include_in(self.simdata["pdes"]["theoryname"], cuboidURI)
         # TODO send as declaration to mmt
         # TODO make view
 
@@ -382,6 +387,8 @@ class Interview(cmd.Cmd):
         mmtresult = userstring
         # TODO store result
         # TODO use symbolic computation to order into LHS and RHS
+        # TODO send as declaration to mmt
+        # TODO make view
         # TODO query number of effective pdes and unknowns from mmt
         if mmtparsed:
             numpdesgiven = 1
@@ -448,8 +455,10 @@ class Interview(cmd.Cmd):
         return self.mmtinterface.mmt_new_decl("inc", in_which_theory, "include " + self.assert_questionmark(what))
 
     def include_bgthys(self, in_which_theory):
+        ok = True
         for bgthy in self.bgthys[self.state]:
-            self.include_in(in_which_theory, bgthy)
+            ok = ok and self.include_in(in_which_theory, bgthy)
+        return ok
 
     def assert_questionmark(self, what):
         qmidx = what.find("?")
@@ -461,7 +470,7 @@ class Interview(cmd.Cmd):
     def new_theory(self, thyname):
         self.mmtinterface.mmt_new_theory(thyname)
         # (ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
-        self.include_bgthys(thyname)
+        return self.include_bgthys(thyname)
 
     def new_view(self, dictentry):
         dictentry["viewname"] = self.construct_current_view_name(dictentry)
@@ -470,14 +479,14 @@ class Interview(cmd.Cmd):
         # recursively look for all views already done and include them
         for viewstring in self.get_recursively(self.simdata, "viewname"):
             if (dictentry["viewname"] != viewstring) and ok:
-                ok = self.include_in(dictentry["viewname"], re.split('AS', viewstring)[-1] + " = " + viewstring)
+                ok = self.include_in(dictentry["viewname"], "?" + re.split('AS', viewstring)[-1] + " = " + "?" + viewstring)
         return ok
 
     def construct_current_view_name(self, dictentry):
         return self.construct_view_name(dictentry, self.state)
 
     def construct_view_name(self, dictentry, state):
-        return dictentry["theoryname"][1:] + "AS" + (self.viewfrom[state][1:])
+        return dictentry["theoryname"] + "AS" + (self.viewfrom[state])
 
     # cf. https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
     def get_recursively(self, search_dict, field):
