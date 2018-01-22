@@ -64,6 +64,10 @@ class MMTReply:
             elements.append(element)
         return elements
 
+    def hasDefinition(self):
+        if self.getDefinition() is not None:
+            return True
+
     def getDefinition(self, constantname):
         element = self.getConstant(constantname)
         if element is not None:
@@ -77,8 +81,20 @@ class MMTReply:
         if element is not None:
             for child in element:
                 if (child.tag) == 'type':
-                    # print(elementToString(child))
-                    return child
+                    print(element_to_string(child))
+                    #return child
+                    for oms in child.iter("{*}OMS"):
+                        return self.get_name_or_expand_if_arrow(oms)
+
+    def get_name_or_expand_if_arrow(self, oms):
+        name = oms.get('name')
+        if name == 'arrow':
+            next = oms.getnext()
+            name = next.get('name')
+            while next.getnext() is not None:
+                next = next.getnext()
+                name = name + " → " + next.get('name')
+        return name
 
     # (probably very volatile) accesses to concrete data structures
     def getIntervalBoundaries(self, mmtreply, intervalname):
