@@ -47,8 +47,7 @@ class Interview(cmd.Cmd):
             State('unknowns', on_enter=['unknowns_begin'], on_exit=['unknowns_exit']),
             State('parameters', on_enter=['parameters_begin'], on_exit=['parameters_exit']),
             State('pdes', on_enter=['pdes_begin'], on_exit=['pdes_exit']),
-            'pdes',
-            'bcs',
+            State('bcs', on_enter=['bcs_begin'], on_exit=['bcs_exit']),
             'sim'
         ]
         states.reverse()
@@ -82,8 +81,8 @@ class Interview(cmd.Cmd):
             'domain': self.domain_handle_input,
             'unknowns': self.unknowns_handle_input,
             'parameters': self.parameters_handle_input,
-            'pdes': self.pdes_handle_input,  # TODO
-            'bcs': None,
+            'pdes': self.pdes_handle_input,
+            'bcs': self.bcs_handle_input,
             'sim': None,
         }
 
@@ -91,11 +90,11 @@ class Interview(cmd.Cmd):
 
         # for ladder-like views
         self.viewfrom = OrderedDict([
-            ('domain', "GeneralDomains"),
-            ('unknowns', "Unknown"),
-            ('parameters', "Parameter"),
-            ('pdes', "PDE"),
-            ('bcs', "BCsRequired"),
+            ('domain', "mDomain"),
+            ('unknowns', "mUnknown"),
+            ('parameters', "mParameter"),
+            ('pdes', "mPDE"),
+            ('bcs', "mBCsRequired"),
         ])
         # to include all the necessary theories every time
         self.bgthys = OrderedDict([
@@ -104,9 +103,9 @@ class Interview(cmd.Cmd):
             ('unknowns', ["http://mathhub.info/MitM/Foundation?Strings", "ephdomain",
                           "http://mathhub.info/MitM/smglom/calculus?higherderivative"]),
             ('parameters', ["http://mathhub.info/MitM/smglom/arithmetics?realarith", "ephdomain"]),
-            ('pdes', ["DifferentialOperators"]),
+            ('pdes', ["mDifferentialOperators"]),
             ('bcs',
-             ["BCTypes", "ephUnknown", "ephPDE", "linearity", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
+             ["mBCTypes", "ephUnknown", "ephPDE", "linearity", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
         ])
 
         # the things we'd like to find out
@@ -172,21 +171,25 @@ class Interview(cmd.Cmd):
                     },
                 ],
             },
-            "bcs": [
-                {
-                    "theoryname": "bc1",
-                    "type": "Dirichlet",
-                    "string": "u (0) = x_1**2",
-                    "on": "[0]",
-                },
-                {
-                    "theoryname": "bc2",
-                    "type": "Dirichlet",
-                    "string": "u (1) = x_1**2",
-                    "on": "[1]",
-                },
-            ],
+            "bcs": {
+                "theoryname": "ephbcs",
+                "bcs": [
+                    {
+                        "name": "bc1",
+                        "type": "Dirichlet",
+                        "string": "u (0) = x_1**2",
+                        "on": "[0]",
+                    },
+                    {
+                        "name": "bc2",
+                        "type": "Dirichlet",
+                        "string": "u (1) = x_1**2",
+                        "on": "[1]",
+                    },
+                ],
+            },
             "sim_type": "FD",
+
         }
 
         self.exaout = ExaOutput()
@@ -201,6 +204,10 @@ class Interview(cmd.Cmd):
         self.dimensions_parsed()
 
     def dimensions_handle_input(self, userstring):
+        #reply_diffops = self.mmtinterface.query_for("mDifferentialOperators")
+        #self.poutput(reply_diffops.tostring())
+        #self.poutput(element_to_string(reply_diffops.getConstant("derivative")))
+        #self.poutput(element_to_string(reply_diffops.getConstant("laplace_operator")))
         try:
             numdim = int(userstring)
         except ValueError:
@@ -230,7 +237,7 @@ class Interview(cmd.Cmd):
             mmtparsed = self.mmtinterface.mmt_new_decl(domain_name, self.simdata[self.state]["theoryname"], parsestring)
         except MMTServerError as error:
             print(error.args)
-        mmtparsed = (mmtparsed if not self.cheating else True)
+        mmtparsed = (mmtparsed.ok if not self.cheating else True)
         if mmtparsed:
             try:
                 mmtreply = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
@@ -271,6 +278,12 @@ class Interview(cmd.Cmd):
                                            "Vecspace = real_lit")  # TODO adjust for higher dimensions
             self.mmtinterface.mmt_new_decl('DomainPred', subdict["viewname"], "DomainPred = " + subdict[
                 "name"] + ".interval_pred")  # the . is unbound, apparently...
+        else:
+            self.new_view(subdict)
+            self.mmtinterface.mmt_new_decl('dom', subdict["viewname"],
+                                           "domain = " + subdict["name"])
+            self.mmtinterface.mmt_new_decl('boun', subdict["viewname"],
+                                           "boundary = " + subdict["name"])
 
     ##### for state unknowns
     def unknowns_begin(self):
@@ -367,7 +380,7 @@ class Interview(cmd.Cmd):
         subdict = self.simdata["parameters"][parameter_name]
         mmtparsed = reply_pconstant.ok
 
-        if not reply_pconstant.hasDefinition() and not self.cheating:
+        if not reply_pconstant.hasDefinition(parameter_name) and not self.cheating:
             self.poutput("Please define this parameter.")
             mmtparsed = False
 
@@ -375,8 +388,8 @@ class Interview(cmd.Cmd):
         if mmtparsed: #and not self.cheating:
             mmtparsed = self.new_view(subdict).ok
             mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("ptype", subdict["viewname"],
-                                                                 "ptype = " + subdict["type"]).ok  # TODO
-            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("ptype", subdict["viewname"],
+                                                                 "ptype = " + subdict["type"]).ok
+            mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("param", subdict["viewname"],
                                                                  "param = " + parameter_name).ok  # TODO
 
         if mmtparsed:
@@ -395,46 +408,67 @@ class Interview(cmd.Cmd):
 
     ##### for state pdes
     def pdes_begin(self):
-        self.poutput("Let's get to your partial differential equation(s). What do they look like?")
+        self.poutput("Let's get to your partial differential equation(s). What do they look like? ∆u = f(x) ?")
         self.simdata["pdes"]["pdes"] = []
 
     def pdes_handle_input(self, userstring):
         # create mmt theory
-        self.simdata["pdes"]["pdes"].append({"theoryname": "ephpde" + len(self.simdata["pdes"]["pdes"])})
+        self.simdata["pdes"]["pdes"].append({"theoryname": "ephpde" + str(len(self.simdata["pdes"]["pdes"]))})
         subdict = self.simdata["pdes"]["pdes"][-1]
         self.new_theory(subdict["theoryname"])
-        # include unknowns, parameters, differential operators
-        #inc = self.include_in(subdict["theoryname"], cuboidURI)
-        # TODO send as declaration to mmt
-        # TODO make view
 
-        mmtparsed = True
-        mmtresult = userstring
         # TODO use symbolic computation to order into LHS and RHS
         parts = re.split("=", userstring)
 
+        # to make them functions on x, place " [ variablename : domainname ] " in front
+        for i in range(len(parts)):
+            if parts[i].find("x") >  -1:
+                parts[i] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[i]
+
         # in lhs replace all unknown names used by more generic ones and add lambda clause in front
         for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
-            parts[0].replace(unkname, "any"+unkname)
-            parts[0] = ["any"+unkname] + parts[0]
+            parts[0] = parts[0].replace(unkname, " any"+unkname)
+            parts[0] = " [ any"+unkname + " : " + self.simdata["unknowns"][unkname]["type"] + " ] " + parts[0]
             # and include the original ones as theory
             inc = self.include_in(subdict["theoryname"], unkname)
         for parname in get_recursively(self.simdata["parameters"], "theoryname"):
             inc = self.include_in(subdict["theoryname"], parname)
 
         # send declarations to mmt
-        reply_lhsconstant = self.mmtinterface.mmt_new_decl("lhs", subdict["theoryname"], subdict["theoryname"] + " = " + parts[0] )
-        if not reply_lhsconstant.ok:  # TODO
+        reply_lhsconstant = self.mmtinterface.mmt_new_decl("lhs", subdict["theoryname"], " mylhs = " + parts[0])
+        if reply_lhsconstant.ok:
+            reply_lhsconstant = self.mmtinterface.query_for(subdict["theoryname"])
+        mmtparsed = reply_lhsconstant.ok
+        mmtresult = reply_lhsconstant.tostring()
+        if not mmtparsed:
             self.please_repeat()
             del subdict
             return
 
+        reply_rhsconstant = self.mmtinterface.mmt_new_decl("rhs", subdict["theoryname"], " myrhs = " + parts[1])
+        if reply_rhsconstant.ok:
+            reply_rhsconstant = self.mmtinterface.query_for(subdict["theoryname"])
+        mmtparsed = reply_rhsconstant.ok
+        if not mmtparsed:
+            self.please_repeat()
+            del subdict
+            return
 
-        # TODO make view
-        # TODO query number of effective pdes and unknowns from mmt
-        if mmtparsed:
-            numpdesgiven = 1
+        #create view
+        #if mmtparsed: #and not self.cheating:
+        mmtparsed = self.new_view(subdict).ok
+        ltype = self.mmtinterface.mmt_infer_type(subdict["theoryname"], parts[0])
+        eqtype = get_last_type(ltype)
+        mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("eqtype", subdict["viewname"],
+                                                                 "eqtype = " + eqtype).ok
+        mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("lhs", subdict["viewname"],
+                                                                 "lhs = " + "mylhs").ok
+        mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("rhs", subdict["viewname"],
+                                                                 "rhs = " + "myrhs").ok  # TODO
+        # TODO query number of effective pdes and unknowns from mmt for higher dimensional PDEs
             # => can assume each to be ==1 for now
+        if mmtparsed:
+            numpdesgiven = len(self.simdata["pdes"]["pdes"])
             self.poutput("Ok, " + mmtresult)
             if numpdesgiven == len(self.simdata["unknowns"]):
                 self.trigger('pdes_parsed')
@@ -445,6 +479,44 @@ class Interview(cmd.Cmd):
 
     def pdes_exit(self):
         self.poutput("These are all the PDEs needed.")
+
+    ##### for state pdes
+    def bcs_begin(self):
+        self.poutput("Let's get to your boundary conditions. What do they look like? solutionat 0. is 1. ?")
+        subdict = self.simdata["bcs"]
+        subdict["bcs"] = []
+        self.new_theory(subdict["theoryname"])
+
+    def bcs_handle_input(self, userstring):
+        # create mmt theory
+        subdict = self.simdata["bcs"]
+        subdict["bcs"].append({"name": "bc" + str(len(subdict["bcs"]))})
+
+        # send declaration to mmt
+        reply_bcconstant = self.mmtinterface.mmt_new_decl("lhs", subdict["theoryname"], subdict["bcs"][-1]["name"] + " = " + userstring)
+        if reply_bcconstant.ok:
+            reply_bcconstant = self.mmtinterface.query_for(subdict["theoryname"])
+        mmtparsed = reply_bcconstant.ok
+        mmtresult = reply_bcconstant.tostring()
+        if not mmtparsed:
+            self.please_repeat()
+            del subdict
+            return
+
+        #TODO make view
+
+        if mmtparsed:
+            measbcsgiven = len(self.simdata["bcs"])
+            self.poutput("Ok, " + mmtresult)
+            if measbcsgiven == len(self.simdata["unknowns"]):
+                self.trigger('bcs_parsed')
+            elif measbcsgiven > len(self.simdata["unknowns"]):
+                self.poutput("now that's too many boundary conditions. ignoring last input.")
+        else:
+            self.please_repeat()
+
+    def bcs_exit(self):
+        self.poutput("These are all the boundary conditions needed.")
 
 # functions for user interaction
     def please_repeat(self, moreinfo=None):
