@@ -21,9 +21,24 @@ import re
 from exaoutput import ExaOutput
 from mmtinterface import *
 
+class InterviewError(Exception):
+    def __init__(self, err):
+        self.error = err
+        super(InterviewError, self).__init__("MoSIS interview error: " + str(self.error))
+
 
 # This "main class" is two things: a REPL loop, by subclassing the cmd2 Cmd class
 # and a state machine as given by the pytransitions package
+def means_no(answer):
+    try:
+        ret = strtobool(answer)
+        if ret == False:
+            return True
+    except ValueError:
+        return False
+    return False
+
+
 class Interview(cmd.Cmd):
 
     def __init__(self, *args, **kwargs):
@@ -67,6 +82,7 @@ class Interview(cmd.Cmd):
                                     after='print_empty_line')
         self.machine.add_transition(trigger='pdes_parsed', source='pdes', dest='bcs', before='print_empty_line')
         self.machine.add_transition(trigger='bcs_parsed', source='bcs', dest='sim', before='print_empty_line')
+        self.machine.add_transition(trigger='sim_finished', source='sim', dest='sim', before='print_empty_line')
 
         # Initialize cmd member variables
         self.myname = 'James'
@@ -83,7 +99,7 @@ class Interview(cmd.Cmd):
             'parameters': self.parameters_handle_input,
             'pdes': self.pdes_handle_input,
             'bcs': self.bcs_handle_input,
-            'sim': None,
+            'sim': self.sim_handle_input,
         }
 
         self.mmtinterface = MMTInterface()
@@ -98,7 +114,7 @@ class Interview(cmd.Cmd):
         ])
         # to include all the necessary theories every time
         self.bgthys = OrderedDict([
-            ('domain', ["SimpleDomains", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
+            ('domain', ["mInterval", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
             # new: RealArithmetics
             ('unknowns', ["http://mathhub.info/MitM/Foundation?Strings", "ephdomain",
                           "http://mathhub.info/MitM/smglom/calculus?higherderivative"]),
@@ -225,32 +241,42 @@ class Interview(cmd.Cmd):
 
     ##### for state domain
     def domain_begin(self):
-        self.poutput("What is the domain you would like to simulate for?     Ω : type ❘ = [?;?]")
+        self.poutput("What is the domain you would like to simulate for?     Ω : type ❘ = [?;?], e.g. Ω = [0.0;1.0]")
         self.poutput("By the way, you can always try and use LaTeX-type input.")
         self.simdata[self.state]["axes"] = OrderedDict()
         self.domain_mmt_preamble()
 
     def domain_handle_input(self, userstring):
         domain_name = re.split('\W+', userstring, 1)[0]
+        subdict = self.simdata[self.state]
         parsestring = userstring
         try:
-            mmtparsed = self.mmtinterface.mmt_new_decl(domain_name, self.simdata[self.state]["theoryname"], parsestring)
+            mmtreply = self.mmtinterface.mmt_new_decl(domain_name, subdict["theoryname"], parsestring)
         except MMTServerError as error:
-            print(error.args)
-        mmtparsed = (mmtparsed.ok if not self.cheating else True)
-        if mmtparsed:
+            self.poutput(error.args[0])
+            raise
+        if mmtreply.ok:
             try:
-                mmtreply = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
+                mmtreply = self.mmtinterface.mmt_infer_type(subdict["theoryname"], domain_name)
+                mmtparsed = (mmtreply.ok)
             except MMTServerError as error:
-                print(error.args)
-            mmtparsed = (mmtreply.ok)  # if not self.cheating else True)
+                print(error.args[0])
+                mmtparsed = False
+        if mmtparsed and mmtreply.inferred_type_to_string() != "type":
+            self.poutput("This seems to not be a type. It should be!")
+            self.please_repeat()
+            return
         if mmtparsed:
-            # (ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
-            self.simdata[self.state]["name"] = domain_name
+            subdict = self.simdata[self.state]
+            mmtreply = self.mmtinterface.query_for(subdict["theoryname"])if not self.cheating else 0
+            subdict["name"] = domain_name
             (fro, to) = mmtreply.getIntervalBoundaries(mmtreply, domain_name) if not self.cheating else ("0.", "1.")
-            self.simdata[self.state]["axes"]["x_1"] = "[" + fro + ";" + to + "]"
-            # self.poutput(self.simdata[self.state]["axes"]["x_1"])
-            (self.simdata[self.state]["from"], self.simdata[self.state]["to"]) = ("[ " + fro + " ]", "[ " + to + " ]")
+            subdict["axes"]["x_1"] = "[" + fro + ";" + to + "]"
+            # self.poutput(subdict["axes"]["x_1"])
+            (subdict["from"], subdict["to"]) = ("[ " + fro + " ]", "[ " + to + " ]")
+
+            self.poutput("we will just assume that the variable is called x for now.")
+            #mmtreply = self.mmtinterface.mmt_new_decl(domain_name, subdict["theoryname"], "x : " + domain_name)
             self.trigger('domain_parsed')
         else:
             self.please_repeat()
@@ -287,38 +313,46 @@ class Interview(cmd.Cmd):
 
     ##### for state unknowns
     def unknowns_begin(self):
-        self.poutput("Which variable(s) are you looking for?   u : " + self.simdata["domain"][
+        self.poutput("Which variable(s) are you looking for? / What are the unknowns in your model?  u : " + self.simdata["domain"][
+            "name"] + " → ??,  e.g., u : " + self.simdata["domain"][
             "name"] + " → ℝ ?")  # problem: omega not a type (yet), need to have it look like one
         self.simdata["unknowns"] = OrderedDict()
 
     def unknowns_handle_input(self, userstring):
-        unknown_name = re.split('\W+', userstring, 1)[0]
+        unknown_name = get_first_word(userstring)
         # replace interval with domain
         parsestring = (
             userstring.replace(self.simdata["domain"]["name"],
                                "pred myDomainPred") if not self.cheating else userstring)
-#TODO things here
-#        if reply_uconstant.hasDefinition() and not self.cheating:
-#            self.poutput("Unknowns cannot be defined!")
-#            mmtparsed = False
+
+        # create mmt theory with includes
+        once = self.new_theory(unknown_name)
+        #self.include_in(unknown_name, self.simdata["domain"]["theoryname"])
+
+        #and one to "throw away" to infer the type
+        self.new_theory(unknown_name + "_to_go_to_trash")
+        test = self.mmtinterface.mmt_new_decl(unknown_name, unknown_name + "_to_go_to_trash",
+                                               parsestring)
 
         # print('type: ' + str(self.get_last_type(get_type_from_string(parsestring))))
         self.simdata["unknowns"][unknown_name] = {
             "theoryname": unknown_name,
-            # "viewname" : self.construct_current_view_name(self.simdata[self.state]),
             "string": parsestring,
-            "type": get_type_from_string(parsestring),
+            "type": self.get_inferred_type(unknown_name + "_to_go_to_trash", unknown_name),
         }
-        self.simdata["unknowns"][unknown_name]["viewname"] = self.construct_current_view_name(
-            self.simdata["unknowns"][unknown_name])
+        #self.simdata["unknowns"][unknown_name]["viewname"] = self.construct_current_view_name(self.simdata["unknowns"][unknown_name])
         subdict = self.simdata["unknowns"][unknown_name]
-        # create mmt theory with includes
-        once = self.new_theory(subdict["theoryname"])
-        self.include_in(subdict["theoryname"], self.simdata["domain"]["theoryname"])
+        # TODO input sanitizing
+        #if self.mmtinterface.query_for(unknown_name + "_to_go_to_trash").hasDefinition(unknown_name):
+        #    self.poutput("Unknowns cannot be defined!")
+        #    return
+        if not subdict["type"].startswith(self.simdata["domain"]["name"] + " →"):
+            self.poutput("Unknown should be a function on " + self.simdata["domain"]["name"] + "!")
+            return
+
         # add unknown's type as constant
         twice = self.mmtinterface.mmt_new_decl(unknown_name, subdict["theoryname"],
-                                               "myUnkType = " + self.simdata["unknowns"][unknown_name][
-                                                   "type"])  # hacky!
+                                               "myUnkType = " + subdict["type"])
         twice = (self.mmtinterface.mmt_new_decl('diffable', subdict["theoryname"],
                                                 "anyuwillbediffable : {u : myUnkType} ⊦ twodiff u ") if not self.cheating else twice)
         mmtparsed = twice.ok
@@ -328,15 +362,14 @@ class Interview(cmd.Cmd):
             mmtparsed = mmtparsed and self.mmtinterface.mmt_new_decl("codomain", subdict["viewname"],
                                                                      "ucodomain = ℝ").ok  # TODO
             mmtparsed = mmtparsed and (self.mmtinterface.mmt_new_decl("unktype", subdict["viewname"],
-                                                                     "unknowntype = myUnkType").ok if not self.cheating else True)
-
+                                                                     "unknowntype = myUnkType").ok)
         if mmtparsed:
             self.poutput("Ok, " + userstring)
             if self.please_prompt("Are these all the unknowns?"):
                 self.trigger('unknowns_parsed')
         else:
             del self.simdata["unknowns"][unknown_name]
-            # need to delete mmt ephemeral theory too
+            # need to delete mmt ephemeral theory too?
             self.please_repeat()
         # print(str(self.simdata))
 
@@ -352,7 +385,7 @@ class Interview(cmd.Cmd):
 
     def parameters_handle_input(self, userstring):
         # self.poutput ("parameterinput "+ userstring)
-        if self.means_no(userstring):
+        if means_no(userstring):
             self.trigger('parameters_parsed')
             return
 
@@ -360,12 +393,13 @@ class Interview(cmd.Cmd):
 
         # create mmt theory
         self.new_theory(parameter_name)
-        # we might need the parameters created so far, so use them
+        # we might need the other parameters created so far, so use them
         for otherparamentry in get_recursively(self.simdata["parameters"], "theoryname"):
             self.include_in(parameter_name, otherparamentry)
 
         # sanitize userstring - check if this works for all cases
         userstring = add_ods(userstring)
+        userstring = functionize(userstring, self.simdata["domain"]["name"])
         self.poutput(userstring)
         reply_pconstant = self.mmtinterface.mmt_new_decl("param", parameter_name, userstring)
         if not reply_pconstant.ok:  # TODO
@@ -393,7 +427,7 @@ class Interview(cmd.Cmd):
                                                                  "param = " + parameter_name).ok  # TODO
 
         if mmtparsed:
-            self.poutput ("Ok, " +  userstring)
+            self.poutput ("Ok, " + userstring)
             if self.please_prompt("Are these all the parameters?"):
                 self.trigger('parameters_parsed')
         else:
@@ -486,6 +520,8 @@ class Interview(cmd.Cmd):
         subdict = self.simdata["bcs"]
         subdict["bcs"] = []
         self.new_theory(subdict["theoryname"])
+        self.new_view(subdict["theoryname"])
+        #TODO make view
 
     def bcs_handle_input(self, userstring):
         # create mmt theory
@@ -500,10 +536,15 @@ class Interview(cmd.Cmd):
         mmtresult = reply_bcconstant.tostring()
         if not mmtparsed:
             self.please_repeat()
-            del subdict
+            del subdict["bcs"][-1]
             return
 
-        #TODO make view
+        if len(subdict["bcs"]) == 1:
+            self.mmtinterface.mmt_new_decl("bc1", subdict["viewname"], "firstBC = " + subdict["bcs"][-1]["name"])
+        elif len(subdict["bcs"]) == 2:
+            self.mmtinterface.mmt_new_decl("bc2", subdict["viewname"], "secondBC = " + subdict["bcs"][-1]["name"])
+        else:
+            raise InterviewError("too many boundary conditions saved")
 
         if mmtparsed:
             measbcsgiven = len(self.simdata["bcs"])
@@ -517,6 +558,25 @@ class Interview(cmd.Cmd):
 
     def bcs_exit(self):
         self.poutput("These are all the boundary conditions needed.")
+
+
+    ##### for state sim
+    def sim_begin(self):
+        #TODO try to find out things about the solvability
+        self.poutput("")
+        #TODO offer a solution algorithm and implementation
+
+    def sim_handle_input(self, userstring):
+        #
+        self.poutput("OK!")
+        self.sim_exit()
+
+    def sim_exit(self):
+        #generate output
+        self.exaout.create_output(self.examplesimdata)
+        self.poutput("Generated ExaStencils input.")
+        #generate and run simulation
+
 
 # functions for user interaction
     def please_repeat(self, moreinfo=None):
@@ -538,21 +598,16 @@ class Interview(cmd.Cmd):
             return self.please_prompt(query)
         return ret
 
-    def means_no(self, answer):
-        try:
-            ret = strtobool(answer)
-            if ret == False:
-                return True
-        except ValueError:
-            return False
-        return False
-
     def obviously_stupid_input(self):
         self.poutput("Trying to be funny, huh?")
 
 # mmt input helper functions
     def include_in(self, in_which_theory, what):
         return self.mmtinterface.mmt_new_decl("inc", in_which_theory, "include " + assert_questionmark(what))
+
+    def add_list_of_declarations(self, in_which_theory, declaration_list):
+        for declaration in declaration_list:
+            self.mmtinterface.mmt_new_decl("inc", in_which_theory, declaration)
 
     def include_bgthys(self, in_which_theory):
         ok = True
@@ -562,9 +617,14 @@ class Interview(cmd.Cmd):
 
 
     def new_theory(self, thyname):
-        self.mmtinterface.mmt_new_theory(thyname)
+        try:
+            self.mmtinterface.mmt_new_theory(thyname)
+            return self.include_bgthys(thyname)
+        except MMTServerError as error:
+            self.poutput(error.args[0])
+            #self.poutput(error.with_traceback())
+            raise
         # (ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
-        return self.include_bgthys(thyname)
 
     def new_view(self, dictentry):
         dictentry["viewname"] = self.construct_current_view_name(dictentry)
@@ -588,6 +648,9 @@ class Interview(cmd.Cmd):
     def construct_view_name(self, dictentry, state):
         return dictentry["theoryname"] + "AS" + (self.viewfrom[state])
 
+    def get_inferred_type(self, in_theory, term):
+        return self.mmtinterface.mmt_infer_type(in_theory, term).inferred_type_to_string()
+
     def print_empty_line(self):
         self.poutput("\n")
 
@@ -601,7 +664,6 @@ class Interview(cmd.Cmd):
             # self.poutput("You entered "+arg)
             self.stateDependentInputHandling[self.state](arg)
         except:
-            self.exaout.create_output(self.examplesimdata)
             raise
             # self.perror('State machine broken: '+self.state)
 
@@ -758,6 +820,10 @@ def add_ods(string):
                 return ''.join(objects)
             onedel = True # start only at second : or =
     return ''.join(objects)
+
+def functionize(string, typename = "Ω", varname = "x"):
+    return string.replace("=", "= [ " + varname + " : " + typename + "]")
+
 
 if __name__ == '__main__':
     Interview().cmdloop()

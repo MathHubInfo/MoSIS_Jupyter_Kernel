@@ -1,6 +1,7 @@
 # to run mmt server : cf. https://docs.python.org/3/library/subprocess.html
 import subprocess
 # subprocess.run(["ls", "-l", "/dev/null"], stdout=subprocess.PIPE) # TODO
+import time
 # for now, running
 # mmt
 # extension info.kwarc.mmt.interviews.InterviewServer
@@ -12,19 +13,30 @@ import _thread
 # http://docs.python-requests.org/en/master/user/quickstart/
 import requests
 from requests.utils import quote
+from urllib.parse import urlencode # is what we actually want to use
 from lxml import etree
 from openmath import openmath
 
 
 def run_mmt_server():
-    subprocess.run(["/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar", "file", "server-interview.msl"])
+    #subprocess.run(["/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar", "file", "server-interview.msl"])
     # TODO keep alive - or wait for jupyter kernel
+    process = subprocess.Popen(["/usr/bin/java", "-jar", "/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"], stdin=subprocess.PIPE, universal_newlines=True)# stdout=subprocess.PIPE)
+    time.sleep(1000)
+    process.stdin.write('server on 8080')
+    process.stdin.flush()
+    while True:
+        time.sleep(100)
+    process.stdin.close()
+    #print('Waiting for mmt to exit')
+    process.wait()
 
 
 class MMTServerError(Exception):
-    def __init__(self, err):
+    def __init__(self, err, longerr=None):
         self.error = err
-        super(MMTServerError, self).__init__("MMT server error: " + str(self.error))
+        self.longerr = longerr
+        super(MMTServerError, self).__init__("MMT server error: " + str(self.error), longerr)
 
 
 class MMTReply:
@@ -45,7 +57,8 @@ class MMTReply:
                     self.ok = False
                     for child in element:
                         if (child.get('class')) == 'message':
-                            raise MMTServerError(child.text)
+                            print(element_to_string(self.root))
+                            raise MMTServerError(child.text, element_to_string(self.root))
                             return
         if not self.ok:
             raise MMTServerError(element_to_string(self.root))
@@ -64,8 +77,8 @@ class MMTReply:
             elements.append(element)
         return elements
 
-    def hasDefinition(self):
-        if self.getDefinition() is not None:
+    def hasDefinition(self, constantname):
+        if self.getDefinition(constantname) is not None:
             return True
 
     def getDefinition(self, constantname):
@@ -111,6 +124,12 @@ class MMTReply:
     def tostring(self):
         return element_to_string(self.root)
 
+    def inferred_type_to_string(self):
+        type_string = ""
+        for mo in self.root.iter("{*}mo"):
+            type_string = type_string + " " + mo.text
+        return type_string.lstrip().rstrip()
+
 
 def element_to_string(element):
     return etree.tostring(element, pretty_print=True).decode('utf8')
@@ -124,37 +143,41 @@ class MMTInterface:
         self.URIprefix = 'http://mathhub.info/'
         self.namespace = 'MitM/smglom/calculus'  # TODO
         self.debugprint = True
-        try:
-            _thread.start_new_thread(run_mmt_server, ())
-        except:
-            print("Error: unable to start mmt thread")
+#        try:
+#            _thread.start_new_thread(run_mmt_server, ())
+#        except:
+#            print("Error: unable to start mmt thread")
 
     def mmt_new_theory(self, thyname):
         # So, ich hab mal was zu MMT/devel gepusht. Es gibt jetzt eine Extension namens InterviewServer. Starten tut man die mit "extension info.kwarc.mmt.interviews.InterviewServer"
         # Wenn du dann in MMT den Server (sagen wir auf Port 8080) startest, kannst du folgende HTTP-Requests ausführen:
         # "http://localhost:8080/:interview/new?theory="<MMT URI>"" fügt eine neue theorie mit der uri <MMT URI> hinzu
-        req = '/' + self.extension + '/new?theory=' + self.get_mpath(
-            thyname) + '&meta=http://mathhub.info/MitM/Foundation?Logic'
+        req = '/' + self.extension + '/new?theory=' + quote(self.get_mpath(
+            thyname)) + '&meta=' + quote('http://mathhub.info/MitM/Foundation?Logic')
         return self.http_request(req)
 
     def mmt_new_view(self, viewname, fromtheory, totheory):
         # analog für ?view="<MMT URI>".
-        req = '/' + self.extension + '/new?view=' + self.get_mpath(viewname) + '&from=' + self.get_mpath(
-            fromtheory) + '&to=' + self.get_mpath(totheory)
+        req = '/' + self.extension + '/new?view=' + quote(self.get_mpath(viewname)) + '&from=' + quote(self.get_mpath(
+            fromtheory)) + '&to=' + quote(self.get_mpath(totheory))
         return self.http_request(req)
 
     def mmt_new_decl(self, declname, thyname, declcontent):
         # ".../:interview/new?decl="<irgendwas>"&cont="<MMT URI>" ist der query-path um der theorie <MMT URI> eine neue declaration hinzuzufügen (includes, konstanten...). Die Declaration sollte dabei in MMT-syntax als text im Body des HTTP-requests stehen.
-        post = '/' + self.extension + '/new?decl=' + declname + '&cont=' + self.get_mpath(thyname)
+        post = '/' + self.extension + '/new?decl=d&cont=' + quote(self.get_mpath(thyname))
         return self.http_request(post, add_dd(declcontent))
 
     def mmt_new_term(self, termname, thyname, termcontent):
         # analog für ".../:interview/new?term="<irgendwas>"&cont="<MMT URI>" für terme - nachdem da nicht klar ist was der server damit tun sollte gibt er den geparsten term als omdoc-xml zurück (wenn alles funktioniert)
-        post = '/' + self.extension + '/new?term=' + termname + '&cont=' + self.get_mpath(thyname)
+        post = '/' + self.extension + '/new?term=' + quote(termname) + '&cont=' + quote(self.get_mpath(thyname))
+        return self.http_request(post, termcontent)
+
+    def mmt_infer_type(self, thyname, termcontent):
+        post = '/' + self.extension + '/infer?cont=' + quote(self.get_mpath(thyname))
         return self.http_request(post, termcontent)
 
     def http_request(self, message, data=None):
-        url = self.serverInstance + (message)
+        url = self.serverInstance + message
         print(url) if self.debugprint else 0
         session = requests.Session()
         adapter = requests.adapters.HTTPAdapter()
@@ -189,12 +212,13 @@ class MMTInterface:
     def query_for(self, thingname):
         # this here just stolen from what MMTPy does
         # querycontent = b'<function name="presentDecl" param="xml"><literal><uri path="http://mathhub.info/MitM/smglom/algebra?magma"/></literal></function>'
-        querycontent = '<function name="presentDecl" param="xml"><literal><uri path="' + self.get_mpath(
-            thingname) + '"/></literal></function>'
+        querycontent = '<function name="presentDecl" param="xml"><literal><uri path="' + quote(self.get_mpath(thingname)) + '"/></literal></function>'
+
         return self.http_qrequest(querycontent)
 
     def http_qrequest(self, data, message='/:query'):
-        print(self.serverInstance + message) if self.debugprint else 0
+        url = self.serverInstance + message
+        print(url) if self.debugprint else 0
         session = requests.Session()
         adapter = requests.adapters.HTTPAdapter()
         session.mount('https://', adapter)
@@ -202,7 +226,7 @@ class MMTInterface:
         print('\n' + str(data)) if self.debugprint else 0
         binary_data = data.encode('UTF-8')
         headers = {'content-type': 'application/xml'}
-        req = session.post((self.serverInstance + message), data=binary_data, headers=headers, stream=True)
+        req = session.post(url, data=binary_data, headers=headers, stream=True)
         root = etree.fromstring(req.text)
         if req.status_code == 200:
             return MMTReply(True, root)
