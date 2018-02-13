@@ -57,7 +57,7 @@ class MMTReply:
                     self.ok = False
                     for child in element:
                         if (child.get('class')) == 'message':
-                            print(element_to_string(self.root))
+                            #print(element_to_string(self.root))
                             raise MMTServerError(child.text, element_to_string(self.root))
                             return
         if not self.ok:
@@ -212,7 +212,7 @@ class MMTInterface:
     def query_for(self, thingname):
         # this here just stolen from what MMTPy does
         # querycontent = b'<function name="presentDecl" param="xml"><literal><uri path="http://mathhub.info/MitM/smglom/algebra?magma"/></literal></function>'
-        querycontent = '<function name="presentDecl" param="xml"><literal><uri path="' + quote(self.get_mpath(thingname)) + '"/></literal></function>'
+        querycontent = '<function name="presentDecl" param="xml"><literal><uri path="' + (self.get_mpath(thingname)) + '"/></literal></function>'
 
         return self.http_qrequest(querycontent)
 
