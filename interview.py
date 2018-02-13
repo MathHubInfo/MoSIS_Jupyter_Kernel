@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-import sys
-import errno
-import traceback
 # http://cmd2.readthedocs.io
 import cmd2 as cmd
 # https://github.com/pytransitions/transitions
@@ -15,7 +12,6 @@ from pathlib import Path
 # https://github.com/phfaist/pylatexenc for directly converting Latex commands to unicode
 from pylatexenc.latex2text import LatexNodes2Text
 import pyparsing as pp
-from lxml import etree
 import re
 
 from exaoutput import ExaOutput
@@ -142,6 +138,7 @@ class Interview(cmd.Cmd):
             ('parameters', "mParameter"),
             ('pdes', "mPDE"),
             ('bcs', "mBCsRequired"),
+            ('sim', "mEllipticLinearDirichletBoundaryValueProblem"),
         ])
         # to include all the necessary theories every time
         self.bgthys = OrderedDict([
@@ -150,10 +147,13 @@ class Interview(cmd.Cmd):
             ('unknowns', ["http://mathhub.info/MitM/Foundation?Strings", "ephdomain",
                           "http://mathhub.info/MitM/smglom/calculus?higherderivative"]),
             ('parameters', ["http://mathhub.info/MitM/smglom/arithmetics?realarith", "ephdomain"]),
-            ('pdes', ["mDifferentialOperators"]),
+            ('pdes', ["mDifferentialOperators"]),#+params, unknowns,
             ('bcs',
-             ["ephdomain", "mBCTypes", "ephUnknown", "ephPDE", "linearity",
-              "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
+             ["ephdomain", "mLinearity",
+              "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),#+params, unknowns, pdes, bctypes
+            ('sim',
+             ["mLinearity",
+              "http://mathhub.info/MitM/Foundation?Strings"]), #+bcs, pde
         ])
 
         # the things we'd like to find out
@@ -282,7 +282,7 @@ class Interview(cmd.Cmd):
         self.domain_mmt_preamble()
 
     def domain_handle_input(self, userstring):
-        domain_name = re.split('\W+', userstring, 1)[0]
+        domain_name = get_first_word(userstring)
         # subdict = self.simdata[self.state]
         with CriticalSubdict(self.simdata[self.state]) as subdict:
             parsestring = userstring
@@ -290,19 +290,16 @@ class Interview(cmd.Cmd):
             mmtreply = self.mmtinterface.mmt_infer_type(subdict["theoryname"], domain_name)
             if mmtreply.inferred_type_to_string() != "type":
                 raise InterviewError("This seems to not be a type. It should be!")
-            if mmtreply.ok:  # TODO make control flow clearer
-                mmtreply = self.mmtinterface.query_for(subdict["theoryname"])  # if not self.cheating else
-                # print(mmtreply.tostring())
-                subdict["name"] = domain_name
-                (fro, to) = mmtreply.getIntervalBoundaries(mmtreply, domain_name) if not self.cheating else ("0.", "1.")  # todo make work again
-                subdict["axes"]["x_1"] = "[" + fro + ";" + to + "]"
-                (subdict["from"], subdict["to"]) = ("[ " + fro + " ]", "[ " + to + " ]")
+            result = self.mmtinterface.query_for(subdict["theoryname"])  # if not self.cheating else
+            # print(mmtreply.tostring())
+            subdict["name"] = domain_name
+            (fro, to) = mmtreply.getIntervalBoundaries(mmtreply, domain_name) if not self.cheating else ("0.", "1.")  # todo make work again
+            subdict["axes"]["x_1"] = "[" + fro + ";" + to + "]"
+            (subdict["from"], subdict["to"]) = ("[ " + fro + " ]", "[ " + to + " ]")
 
-                self.poutput("we will just assume that the variable is called x for now.")
-                # mmtreply = self.mmtinterface.mmt_new_decl(domain_name, subdict["theoryname"], "x : " + domain_name)
-                self.trigger('domain_parsed')
-            else:
-                self.please_repeat()
+            self.poutput("we will just assume that the variable is called x for now.")
+            # mmtreply = self.mmtinterface.mmt_new_decl(domain_name, subdict["theoryname"], "x : " + domain_name)
+            self.trigger('domain_parsed')
 
     def domain_exit(self):
         self.domain_mmt_postamble()
@@ -310,7 +307,6 @@ class Interview(cmd.Cmd):
     def domain_mmt_preamble(self):
         # set the current MMT theoryname for parsing the input TODO use right dimension
         self.simdata[self.state]["theoryname"] = "ephdomain"
-        # self.simdata[self.state]["viewname"] = self.construct_current_view_name(self.simdata[self.state])
         self.new_theory(self.simdata[self.state]["theoryname"])
         # (ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
 
@@ -363,7 +359,7 @@ class Interview(cmd.Cmd):
                 "theoryname": unknown_name,
                 "string": parsestring,
                 "type": type,
-                "codomain": type.replace(self.simdata["domain"]["name"] + " →", "", 1),
+                "codomain": type.replace(self.simdata["domain"]["name"] + " →", "", 1).strip(),
             }
             with CriticalSubdict(self.simdata["unknowns"][unknown_name]) as subdict:
                 if self.mmtinterface.query_for(unknown_name + "_to_go_to_trash").hasDefinition(unknown_name):
@@ -446,17 +442,16 @@ class Interview(cmd.Cmd):
         self.simdata["pdes"]["pdes"] = []
 
     def pdes_handle_input(self, userstring):
-        # create mmt theory
-        self.simdata["pdes"]["pdes"].append({"theoryname": "ephpde" + str(len(self.simdata["pdes"]["pdes"]))})
-
+        self.simdata["pdes"]["pdes"].append({})
         with CriticalSubdict(self.simdata["pdes"]["pdes"][-1]) as subdict:
+            subdict["theoryname"] = "ephpde" + str(len(self.simdata["pdes"]["pdes"]))
             self.new_theory(subdict["theoryname"])
 
             # TODO use symbolic computation to order into LHS and RHS
             parts = re.split("=", userstring)
 
             if len(parts) is not 2:
-                raise InterviewError("This does not look like a function.")
+                raise InterviewError("This does not look like an equation.")
 
             # store the info
             subdict["string"] = userstring
@@ -507,7 +502,7 @@ class Interview(cmd.Cmd):
 
             for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
                 op = subdict["lhsstring"].replace(unkname, "")
-                op = op.rstrip().lstrip()
+                op = op.strip()
 
             # store the info
             subdict["op"] = op
@@ -528,107 +523,155 @@ class Interview(cmd.Cmd):
     def pdes_exit(self):
         self.poutput("These are all the PDEs needed.")
 
-    ##### for state pdes
+    ##### for state bcs
     def bcs_begin(self):
         self.poutput(
             "Let's get to your boundary conditions. What do they look like? solutionat 0.0 is 1.0 or solutionatboundaryis f ?")
-        subdict = self.simdata["bcs"]
-        subdict["theoryname"] = "ephebcs"
-        subdict["bcs"] = []
-        self.new_theory(subdict["theoryname"])
-        # apparently, need to include everything explicitly so that view works
-        for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
-            self.include_in(subdict["theoryname"], unknownentry)
-        for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
-            self.include_in(subdict["theoryname"], paramentry)
-        for pdeentry in get_recursively(self.simdata["pdes"], "theoryname"):
-            self.include_in(subdict["theoryname"], pdeentry)
-        self.new_view(subdict)
+        bctypetheoryname = self.redefine_bcs()
+        with CriticalSubdict(self.simdata["bcs"]) as subdict:
+            subdict["theoryname"] = "ephbcs"
+            subdict["bcs"] = []
+            self.new_theory(subdict["theoryname"])
+            # apparently, need to include everything explicitly so that view works
+            for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+                self.include_in(subdict["theoryname"], unknownentry)
+            for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                self.include_in(subdict["theoryname"], paramentry)
+            for pdeentry in get_recursively(self.simdata["pdes"], "theoryname"):
+                self.include_in(subdict["theoryname"], pdeentry)
+            self.include_in(subdict["theoryname"], bctypetheoryname)
+            self.new_view(subdict)
+            subdict["measure_given"] = 0
 
     def bcs_handle_input(self, userstring):
-        # create mmt theory
-        currentname = "bc" + str(len(self.simdata["bcs"]["bcs"]))
-        self.simdata["bcs"]["bcs"].append({"name": currentname})
-
         with CriticalSubdict(self.simdata["bcs"]) as subdict:
-            #subdict = self.simdata["bcs"]
-            try:
-                type = self.get_inferred_type(subdict["theoryname"], "[u : Ω → ℝ] u(0.0)")
-                type = self.get_inferred_type(subdict["theoryname"], "[u : Ω → ℝ] u")
-            except MMTServerError as error:
-                self.poutput(error.args[0])
+            currentname = "bc" + str(len(subdict["bcs"]))
+            subdict["bcs"].append({"name": currentname})
+            # TODO use symbolic computation to order into LHS and RHS
+            parts = re.split("=", userstring)
 
-            # send declaration to mmt
-            reply_bcconstant = self.mmtinterface.mmt_new_decl("bcs", subdict["theoryname"], subdict["bcs"][-1]["name"] +
-                                                              " = " + userstring)
-            if reply_bcconstant.ok:
-                reply_bcconstant = self.mmtinterface.query_for(subdict["theoryname"])
-            mmtparsed = reply_bcconstant.ok
-            mmtresult = reply_bcconstant.tostring()
-            if not mmtparsed:
-                self.please_repeat()
-                del subdict["bcs"][-1]
-                return
+            if len(parts) is not 2:
+                raise InterviewError("This does not look like a boundary condition.")
+            # store the info
+            subdict["bcs"][-1]["string"] = userstring
+            subdict["bcs"][-1]["lhsstring"] = parts[0]
+            subdict["bcs"][-1]["rhsstring"] = parts[1]
 
-            if len(subdict["bcs"]) == 1:
-                self.mmtinterface.mmt_new_decl("bc1", subdict["viewname"], "firstBC = " + subdict["bcs"][-1]["name"])
-            elif len(subdict["bcs"]) == 2:
-                self.mmtinterface.mmt_new_decl("bc2", subdict["viewname"], "secondBC = " + subdict["bcs"][-1]["name"])
-            else:
-                raise InterviewError("too many boundary conditions saved")
+            # to make a function on x, place " [ variablename : boundaryname ] " in front
+            if parts[0].find("x") > -1:
+                parts[0] = " [ x : " + self.simdata["domain"]['boundary_name'] + " ] " + parts[0]
+            if parts[1].find("x") > -1:
+                parts[1] = " [ x : " + self.simdata["domain"]['boundary_name'] + " ] " + parts[1]
 
-            if mmtparsed:
-                measbcsgiven = len(self.simdata["bcs"])
-                self.poutput("Ok, " + mmtresult)
-                if measbcsgiven == len(self.simdata["unknowns"]):
-                    self.trigger('bcs_parsed')
-                elif measbcsgiven > len(self.simdata["unknowns"]):
-                    self.poutput("now that's too many boundary conditions. ignoring last input.")
-            else:
-                self.please_repeat()
+            # in lhs replace all unknown names used by more generic ones and add lambda clause in front
+            for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
+                parts[0] = parts[0].replace(unkname, " any" + unkname)
+                parts[0] = " [ any" + unkname + " : " + self.simdata["unknowns"][unkname]["type"] + " ] " + parts[0]
+
+                type = self.get_inferred_type(subdict["theoryname"], parts[0])
+                if type_is_function_to(type, self.simdata["unknowns"][unkname]["type"]):
+                    # right-hand side: infer type, make function if not one yet
+                    rhstype = self.get_inferred_type(subdict["theoryname"], parts[1])
+                    if not type_is_function_from(rhstype, self.simdata["domain"]["name"])\
+                            and not type_is_function_from(rhstype, self.simdata["domain"]["boundary_name"]):
+                        parts[1] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[1]
+                    self.add_list_of_declarations(subdict["viewname"], [
+                        "firstBC = myDirichletBCfun " + parts[1],
+                        "secondBC = myDirichletBCfun " + parts[1],
+                    ])
+                    subdict["measure_given"] = 2
+                elif type_is_function_to(type, self.simdata["unknowns"][unkname]["codomain"]):
+                    at_x = re.split('\(\)', subdict["bcs"][-1]["lhsstring"])[-1] #TODO
+                    if len(subdict["bcs"]) == 1:
+                        self.mmtinterface.mmt_new_decl("bc1", subdict["viewname"],
+                                                       "firstBC = solutionat " + at_x + "is" + parts[1] )
+                    elif len(subdict["bcs"]) == 2:
+                        self.mmtinterface.mmt_new_decl("bc2", subdict["viewname"],
+                                                       "secondBC = " + subdict["bcs"][-1]["name"])#TODO
+                    else:
+                        raise InterviewError("too many boundary conditions saved")
+                    subdict["measure_given"] += 1
+
+            #try:
+            #    type = self.get_inferred_type(subdict["theoryname"], "[u : Ω → ℝ] u(0.0)")
+            #    type = self.get_inferred_type(subdict["theoryname"], "[u : Ω → ℝ] u")
+            #except MMTServerError as error:
+            #    self.poutput(error.args[0])
+
+            self.poutput("Ok ")
+            if subdict["measure_given"] == len(self.simdata["unknowns"])*2: #TODO times order
+                self.trigger('bcs_parsed')
+            elif subdict["measure_given"] > len(self.simdata["unknowns"]):
+                raise InterviewError("now that's too many boundary conditions. ignoring last input.")
 
     def bcs_exit(self):
         self.poutput("These are all the boundary conditions needed.")
 
     def redefine_bcs(self):
         for unknown in get_recursively(self.simdata["unknowns"], "theoryname"):
-            bctypetheoryname = unknown + "BCTypes"  # TODO
-            self.new_theory(bctypetheoryname)
-            self.include_in(bctypetheoryname, unknown)
-            self.include_in(bctypetheoryname, "mDifferentialOperators")
-            self.add_list_of_declarations(bctypetheoryname,
-                                          ["myDirichletBC: {where: myBoundary, rhs: ℝ}(" + self.simdata["domain"][
-                                              "name"] + " → " + + ") → prop "
-                                                                  "❘ = [where, rhs][u] u where ≐ rhs ❘  # solutionat 1 is 2 ❙",
-                                           "myDirichletBCfun : {rhs: myBoundary → ℝ }(" + self.simdata["domain"][
-                                               "name"] + " → ℝ) → prop "
-                                                         "❘ = [rhs] [u] ∀[x:myBoundary ] u x ≐ rhs x ❘ # solutionatboundaryis 1 ❙"])
-            return bctypetheoryname  # Todo adapt for more than 1
+            with CriticalSubdict(self.simdata["bcs"]) as subdict:
+                subdict["bctypes"] = {}
+                bctypetheoryname = unknown + "BCTypes"
+                subdict["bctypes"]["theoryname"] = bctypetheoryname
+                self.new_theory(bctypetheoryname)
+                self.include_in(bctypetheoryname, unknown)
+                self.include_in(bctypetheoryname, "mDifferentialOperators")
+                self.add_list_of_declarations(bctypetheoryname,
+                        [
+                            "myDirichletBC: {where: " + self.simdata["domain"]["boundary_name"] + ", rhs: " +
+                                self.simdata["unknowns"][unknown]["codomain"] + "}(" + self.simdata["domain"]["name"] + " → " +
+                                self.simdata["unknowns"][unknown]["codomain"] + ") → prop "
+                                " ❘ = [where, rhs][u] u where ≐ rhs ❘  # solutionat 1 is 2 ",
+                            "myDirichletBCfun : {rhs: " + self.simdata["domain"]["boundary_name"] + " → " +
+                                self.simdata["unknowns"][unknown]["codomain"] + " }(" + self.simdata["domain"]["name"] + " → " +
+                                self.simdata["unknowns"][unknown]["codomain"] + ") → prop ❘ = [rhs] [u] ∀[x:" + self.simdata["domain"]["boundary_name"] + " ] u x ≐ rhs x "
+                                "❘ # solutionatboundaryis 1",
+                        ]
+                )
+                #viewname = bctypetheoryname + "ASmBCTypes"
+                #subdict["bctypes"]["viewname"] = viewname
+                #self.mmtinterface.mmt_new_view(viewname, bctypetheoryname, "mBCTypes")
+                #self.add_list_of_declarations(viewname,
+                #                              ["DirichletBC = myDirichletBC ",
+                #                               #" = myDirichletBCfun"
+                #                               ])
+                return bctypetheoryname  # Todo adapt for more than 1
 
     ##### for state sim
     def sim_begin(self):
-        # TODO try to find out things about the solvability
-        self.poutput("")
-        # TODO offer a solution algorithm and implementation if all necessary things are defined
+        # TODO try to find out things about the solvability ourselves
+        self.simdata[self.state]["theoryname"] = "ephEllipticLinearDirichletBoundaryValueProblem"
+        self.new_theory(self.simdata[self.state]["theoryname"])
+        self.new_view(self.simdata[self.state]["theoryname"])
+        for pde in self.simdata["pdes"]["pdes"]:
+            self.poutput("Do you know something about the operator " + pde["op"] + "?"
+                         "Is it e.g. linear, elliptic, not hyperbolic ? ")
 
     def sim_handle_input(self, userstring):
-        #
-        self.poutput("OK!")
-        self.sim_exit()
+        if means_no(userstring):
+            self.poutput("Ok, let's try to simulate it.")
+            self.sim_exit()
+            return
+
+        # TODO offer a solution algorithm and implementation if all necessary things are defined
+        with CriticalSubdict(self.simdata["sim"]) as subdict:
+            #parts = re.split(" ", userstring)
+            parsestring = userstring.replace("not", "¬")
+            for property in ["linear", "elliptic"]:
+                if parsestring.find(property) > -1:
+                    self.add_list_of_declarations(subdict["theoryname"], [
+                        "user_" + property + " : ⊦ " + parsestring + "mylhs"
+                    ])
+            self.poutput("OK!")
+            self.poutput("do you know anything else?")
 
     def sim_exit(self):
         # generate output
         self.exaout.create_output(self.simdata)
         self.poutput("Generated ExaStencils input.")
-        # generate and run simulation
+        #TODO generate and run simulation
 
-    # functions for user interaction
-    def please_repeat(self, moreinfo=None):
-        append = ""
-        if moreinfo:
-            append = "\nDetails: " + moreinfo
-        self.poutput("I did not catch that. Could you please rephrase?" + append)
-
+    #### functions for user interaction
     def please_prompt(self, query):
         self.poutput(query + " [Y/n]? ")
         val = input()
@@ -710,7 +753,6 @@ class Interview(cmd.Cmd):
         except Exception as error:
             self.exaout.create_output(self.simdata)
             raise
-            # self.perror('State machine broken: '+self.state)
 
     # called when user types 'explain [expression]'
     def do_explain(self, expression):
@@ -776,7 +818,8 @@ class Interview(cmd.Cmd):
 # cf. https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
 def get_recursively(search_dict, field):
     """
-    Takes a dict with nested lists and dicts, and searches all dicts for a key of the field provided.
+    Takes a dict with nested lists and dicts, and searches all dicts for a key of the field provided,
+    returning a list of the values.
     """
     fields_found = []
     for key, value in search_dict.items():
@@ -806,18 +849,40 @@ def insert_type(string, whichtype):
     return string[:eqidx] + " ❘ " + string[eqidx:]
 
 
-# def get_type_from_string(string):
-#    colidx = string.find(":")
-#    eqidx = string.find("=")
-#    if -1 < string.find("❘") < eqidx:
-#        eqidx = string.find("❘")
-#    if eqidx > -1:
-#        return string[colidx + 1:eqidx]
-#    return string[colidx + 1:]
-
 def type_is_function_from(type_string, from_string):
-    return type_string.startswith(from_string + " →")
+    if type_string.startswith(from_string + " →"):
+        return True
+    if type_string.startswith("{ : " + from_string):
+        return True
 
+    from_string = make_list_of_type_symbols(from_string)
+    type_string = make_list_of_type_symbols(type_string)
+
+    if len(from_string) > len(type_string):
+        return False
+
+    for index in range(len(from_string)):
+        if from_string[index] != type_string[index]:
+            return False
+
+    return True
+
+def type_is_function_to(type_string, to_string):
+    if type_string.endswith("→ " + to_string):
+        return True
+    if type_string.endswith("} " + to_string):
+        return True
+    to_string = make_reverse_list_of_type_symbols(to_string)
+    type_string = make_reverse_list_of_type_symbols(type_string)
+
+    if len(to_string) > len(type_string):
+        return False
+
+    for index in range(len(to_string)):
+        if to_string[index] != type_string[index]:
+            return False
+
+    return True
 
 def insert_before_def(string, insertstring):
     eqidx = string.find("=")
@@ -836,10 +901,33 @@ def get_last_type(string):
     return re.split('[→ \s]', string)[-1]
 
 
+def make_reverse_list_of_type_symbols(string):
+    slist = make_list_of_type_symbols(string)
+    slist.reverse()
+    return slist
+
+
+def make_list_of_type_symbols(string):
+    string = remove_arrows(remove_colons(remove_curly_brackets(remove_round_brackets(string))))
+    slist = string.split(' ')
+    slist = list(filter(lambda a: a != '', slist))
+    return slist
+
+
 def remove_round_brackets(string):
-    string = string.replace(")", "")
-    string = string.replace("(", "")
-    return string
+    return string.replace(")", "").replace("(", "")
+
+
+def remove_curly_brackets(string):
+    return string.replace("{", "").replace("}", "")
+
+
+def remove_arrows(string):
+    return string.replace("→", "")
+
+
+def remove_colons(string):
+    return string.replace(":", "")
 
 
 def has_equals(self, string):

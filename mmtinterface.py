@@ -128,7 +128,7 @@ class MMTReply:
         type_string = ""
         for mo in self.root.iter("{*}mo"):
             type_string = type_string + " " + mo.text
-        return type_string.lstrip().rstrip()
+        return type_string.strip()
 
 
 def element_to_string(element):
