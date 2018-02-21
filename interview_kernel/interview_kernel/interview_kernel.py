@@ -53,7 +53,7 @@ class CriticalSubdict():
                 self.subdict[key] = self.initial_subdict[key]
             print(value)
             if isinstance(value, MMTServerError) or isinstance(value, InterviewError):
-                self.please_repeat(value)
+                self.please_repeat(value.args[0])
                 return True
             else:
                 return False
@@ -90,7 +90,7 @@ class Interview(Kernel):
         for i in range(0x20, 0x2E7F):
             self.legalChars += chr(i)
 
-        # call cmd constructor
+        # call superclass constructor
         super(Interview, self).__init__(*args, **kwargs)
 
         # Initialize a state machine
@@ -876,7 +876,7 @@ class Interview(Kernel):
 
     def poutput(self, text):
         """Accumulate the output here"""
-        self.poutstring += text + "\n"
+        self.poutstring += str(text) + "\n"
 
     ############# input processing if not explain or undo
     def do_execute(self, code, silent, store_history=True, user_expressions=None,
@@ -884,8 +884,8 @@ class Interview(Kernel):
         """This is where the user input enters our code"""
         arg = LatexNodes2Text().latex_to_text(code)
 
-        #if not self.prompt_input_handling(arg):
-        self.state_input_handling(arg)
+        if not self.prompt_input_handling(arg):
+            self.state_input_handling(arg)
 
         if not silent:
             stream_content = {'name': 'stdout', 'text': self.poutstring}
@@ -898,7 +898,7 @@ class Interview(Kernel):
                 'execution_count': self.execution_count,
                 'payload': [],
                 'user_expressions': {},
-        }
+                }
 
     def state_input_handling(self, arg):
         """The standard input handling, depending on which state we are in"""
@@ -906,11 +906,12 @@ class Interview(Kernel):
         try:
             self.stateDependentInputHandling[self.state](arg)
         except Exception as error:
-            self.exaout.create_output(self.simdata)
+            #self.exaout.create_output(self.simdata)
             raise
 
     def please_prompt(self, query, if_yes, if_no=None):
-        self.poutput(query + " [Y/n]? ")
+        self.poutput(str(query) + " [Y/n]? ")
+        self.prompted = True
         self.if_yes = if_yes
         self.if_no = if_no
 
@@ -923,20 +924,21 @@ class Interview(Kernel):
                 ret = True
             else:
                 try:
-                    ret = strtobool(arg)
+                    ret = strtobool(str(arg).strip().lower())
                 except ValueError:
                     # or use as input to callback an input processing fcn..?
                     self.poutput("Please answer with Y/n")
                     return True
-                self.poutput(ret)
+            self.prompted = False
             if ret:
                 self.if_yes()
+                self.poutput("IF Yes")
             elif self.if_no is not None:
                 self.if_no()
+                self.poutput("IF No")
             else:
                 return False
             return True
-            self.prompted = False
         return False
 
     # called when user types 'explain [expression]'
@@ -1027,7 +1029,7 @@ def get_recursively(search_dict, field):
 def insert_type(string, whichtype):
     eqidx = string.find("=")
     if eqidx < 0:
-        raise Exception
+        raise InterviewError
     if not self.has_colon(string):
         # print('has no colon ' + equidx)
         return string[:eqidx] + " : " + whichtype + " ❘ " + string[eqidx:]
@@ -1078,7 +1080,7 @@ def remove_apply_brackets(string):
 def insert_before_def(string, insertstring):
     eqidx = string.find("=")
     if eqidx < 0:
-        raise Exception
+        raise InterviewError
     return string[:eqidx + 1] + " " + insertstring + " " + string[eqidx + 1:]
 
 
