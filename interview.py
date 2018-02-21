@@ -295,6 +295,10 @@ class Interview(cmd.Cmd):
         # self.greeting()
         self.update_prompt()
 
+        self.prompted = False
+        self.if_yes = None
+        self.if_no = None
+
     ##### for state dimensions
     def dimensions_begin(self):
         self.poutput("How many dimensions does your model have?")
@@ -336,13 +340,13 @@ class Interview(cmd.Cmd):
         with CriticalSubdict(self.simdata[self.state]) as subdict:
             parsestring = userstring
             mmtreply = self.mmtinterface.mmt_new_decl(domain_name, subdict["theoryname"], parsestring)
-            mmtreply = self.mmtinterface.mmt_infer_type(subdict["theoryname"], domain_name)
-            if mmtreply.inferred_type_to_string() != "type":
+            mmttype = self.mmtinterface.mmt_infer_type(subdict["theoryname"], domain_name)
+            if mmttype.inferred_type_to_string() != "type":
                 raise InterviewError("This seems to not be a type. It should be!")
             result = self.mmtinterface.query_for(subdict["theoryname"])  # if not self.cheating else
-            # print(mmtreply.tostring())
+            print(result.tostring())
             subdict["name"] = domain_name
-            (fro, to) = mmtreply.getIntervalBoundaries(mmtreply, domain_name) if not self.cheating else (0.0, 1.0)  # todo make work again
+            (fro, to) = mmtreply.getIntervalBoundaries(result, domain_name) if not self.cheating else (0.0, 1.0)  # todo make work again
             subdict["axes"]["x_1"] = "[" + str(fro) + ";" + str(to) + "]"
             (subdict["from"], subdict["to"]) = (fro, to)
 
@@ -476,8 +480,7 @@ class Interview(cmd.Cmd):
             self.mmtinterface.mmt_new_decl("param", subdict["viewname"],
                                                                          "param = " + parameter_name)
             self.poutput("Ok, " + parsestring)
-            if self.please_prompt("Are these all the parameters?"):
-                self.trigger('parameters_parsed')
+            self.please_prompt("Are these all the parameters?", lambda: self.trigger('parameters_parsed'))
 
     def parameters_exit(self):
         # print(str(self.simdata["parameters"]))
@@ -771,16 +774,12 @@ class Interview(cmd.Cmd):
 
     ##### for state sim
     def sim_begin(self):
-        if self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?"):
-            self.simdata["sim"]["type"] = "FiniteDifferences"
-            self.sim_exit();
-        return
+        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?",
+                           self.sim_ok_fd)
 
     def sim_handle_input(self, userstring):
-        if self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?"):
-            self.simdata["sim"]["type"] = "FiniteDifferences"
-            self.sim_exit();
-        return
+        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?",
+                           self.sim_ok_fd)
 
     def sim_exit(self):
         # generate output
@@ -788,9 +787,13 @@ class Interview(cmd.Cmd):
         self.poutput("Generated ExaStencils input.")
         #TODO generate and run simulation
 
+    def sim_ok_fd(self):
+        self.simdata["sim"]["type"] = "FiniteDifferences"
+        self.sim_exit()
+
     #### functions for user interaction
     def please_prompt(self, query):
-        self.poutput(query + " [Y/n]? ")
+        self.poutput(query + " [y/n]? ")
         val = input()
         if val == "":
             return True
@@ -875,11 +878,49 @@ class Interview(cmd.Cmd):
         raw = line.parsed['raw']
         arg = LatexNodes2Text().latex_to_text(raw)
         # pythonic switch-case, cf. https://bytebaker.com/2008/11/03/switch-case-statement-in-python/
+
+        if not self.prompt_input_handling(arg):
+            self.state_input_handling(arg)
+
+    def state_input_handling(self, arg):
+        """The standard input handling, depending on which state we are in"""
+        # pythonic switch-case, cf. https://bytebaker.com/2008/11/03/switch-case-statement-in-python/
         try:
             self.stateDependentInputHandling[self.state](arg)
         except Exception as error:
-            self.exaout.create_output(self.simdata)
+            #self.exaout.create_output(self.simdata)
             raise
+
+    def please_prompt(self, query, if_yes, if_no=None):
+        self.poutput(str(query) + " [Y/n]? ")
+        self.prompted = True
+        self.if_yes = if_yes
+        self.if_no = if_no
+
+    def prompt_input_handling(self, arg):
+        """ If we asked for a yes-no answer, execute what was specified in please_prompt.
+        return true if the input was handled here, and false if not."""
+        if self.prompted:
+            if arg == "":
+                self.poutput("Yes")
+                ret = True
+            else:
+                try:
+                    ret = strtobool(str(arg).strip().lower())
+                except ValueError:
+                    # or use as input to callback an input processing fcn..?
+                    self.poutput("Please answer with Y/n")
+                    return True
+                self.poutput(ret)
+            self.prompted = False
+            if ret:
+                self.if_yes()
+            elif self.if_no is not None:
+                self.if_no()
+            else:
+                return False
+            return True
+        return False
 
     # called when user types 'explain [expression]'
     def do_explain(self, expression):
