@@ -2,21 +2,13 @@
 
 # http://cmd2.readthedocs.io
 import cmd2 as cmd
-# https://github.com/pytransitions/transitions
-from transitions import Machine, State
-from collections import OrderedDict
-# strings:
 # http://mattoc.com/python-yes-no-prompt-cli.html
 from distutils.util import strtobool
-from pathlib import Path
 # https://github.com/phfaist/pylatexenc for directly converting Latex commands to unicode
 from pylatexenc.latex2text import LatexNodes2Text
 import pyparsing as pp
-import re
 
 from pde_state_machine import *
-from string_handling import *
-
 
 # This "main class" is two things: a REPL loop, by subclassing the cmd2 Cmd class
 # and a state machine as given by the pytransitions package
@@ -43,8 +35,6 @@ class Interview(cmd.Cmd):
                                                                            "How many dimensions does your model have?"
         # self.greeting()
         self.update_prompt()
-
-        self.state_machine.prompted = False
 
 
     #### functions for user interaction

@@ -427,38 +427,39 @@ class PDE_States:
             return
 
         parameter_name = get_first_word(userstring)
-        self.simdata["parameters"][parameter_name] = {}
-        with CriticalSubdict(self.simdata["parameters"][parameter_name]) as subdict:
-            # create mmt theory
-            self.new_theory(parameter_name)
-            # we might need the other parameters created so far, so use them
-            for otherparamentry in get_recursively(self.simdata["parameters"], "theoryname"):
-                self.include_in(parameter_name, otherparamentry)
+        with CriticalSubdict(self.simdata["parameters"]) as psubdict:
+            self.simdata["parameters"][parameter_name] = {}
+            with CriticalSubdict(self.simdata["parameters"][parameter_name]) as subdict:
+                # create mmt theory
+                self.new_theory(parameter_name)
+                # we might need the other parameters created so far, so use them
+                for otherparamentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                    self.include_in(parameter_name, otherparamentry)
 
-            # sanitize userstring - check if this works for all cases
-            parsestring = add_ods(userstring)
-            if parsestring.startswith(parameter_name + "(") or parsestring.startswith(parameter_name + " ("):#todo make smarter for more dimensions
-               parsestring = remove_apply_brackets(parsestring)
-            parsestring = functionize(parsestring, self.simdata["domain"]["name"])
-            # self.poutput(parsestring)
-            reply_pconstant = self.mmtinterface.mmt_new_decl("param", parameter_name, parsestring)
-            reply_pconstant = self.mmtinterface.query_for(parameter_name)
-            subdict["theoryname"] = parameter_name
-            subdict["string"] = userstring
-            subdict["parsestring"] = parsestring
-            subdict["type"] = self.get_inferred_type(parameter_name, parameter_name)
+                # sanitize userstring - check if this works for all cases
+                parsestring = add_ods(userstring)
+                if parsestring.startswith(parameter_name + "(") or parsestring.startswith(parameter_name + " ("):#todo make smarter for more dimensions
+                   parsestring = remove_apply_brackets(parsestring)
+                parsestring = functionize(parsestring, self.simdata["domain"]["name"])
+                # self.poutput(parsestring)
+                reply_pconstant = self.mmtinterface.mmt_new_decl("param", parameter_name, parsestring)
+                reply_pconstant = self.mmtinterface.query_for(parameter_name)
+                subdict["theoryname"] = parameter_name
+                subdict["string"] = userstring
+                subdict["parsestring"] = parsestring
+                subdict["type"] = self.get_inferred_type(parameter_name, parameter_name)
 
-            # if not reply_pconstant.hasDefinition(parameter_name) and not self.cheating:
-            #    InterviewError("Please define this parameter.")
+                # if not reply_pconstant.hasDefinition(parameter_name) and not self.cheating:
+                #    InterviewError("Please define this parameter.")
 
-            # create view
-            self.new_view(subdict)
-            self.mmtinterface.mmt_new_decl("ptype", subdict["viewname"],
-                                                                         "ptype = " + subdict["type"])
-            self.mmtinterface.mmt_new_decl("param", subdict["viewname"],
-                                                                         "param = " + parameter_name)
-            self.poutput("Ok, " + parsestring)
-            self.please_prompt("Are these all the parameters?", lambda: self.trigger('parameters_parsed'))
+                # create view
+                self.new_view(subdict)
+                self.mmtinterface.mmt_new_decl("ptype", subdict["viewname"],
+                                                                             "ptype = " + subdict["type"])
+                self.mmtinterface.mmt_new_decl("param", subdict["viewname"],
+                                                                             "param = " + parameter_name)
+                self.poutput("Ok, " + parsestring)
+                self.please_prompt("Are these all the parameters?", lambda: self.trigger('parameters_parsed'))
 
     def parameters_exit(self):
         # print(str(self.simdata["parameters"]))
@@ -472,82 +473,83 @@ class PDE_States:
         self.simdata["pdes"]["pdes"] = []
 
     def pdes_handle_input(self, userstring):
-        self.simdata["pdes"]["pdes"].append({})
-        with CriticalSubdict(self.simdata["pdes"]["pdes"][-1]) as subdict:
-            subdict["theoryname"] = "ephpde" + str(len(self.simdata["pdes"]["pdes"]))
-            self.new_theory(subdict["theoryname"])
+        with CriticalSubdict(self.simdata["pdes"]["pdes"]) as psubdict:
+            self.simdata["pdes"]["pdes"].append({})
+            with CriticalSubdict(self.simdata["pdes"]["pdes"][-1]) as subdict:
+                subdict["theoryname"] = "ephpde" + str(len(self.simdata["pdes"]["pdes"]))
+                self.new_theory(subdict["theoryname"])
 
-            # TODO use symbolic computation to order into LHS and RHS
-            parts = re.split("=", userstring)
+                # TODO use symbolic computation to order into LHS and RHS
+                parts = re.split("=", userstring)
 
-            if len(parts) is not 2:
-                raise InterviewError("This does not look like an equation.")
+                if len(parts) is not 2:
+                    raise InterviewError("This does not look like an equation.")
 
-            # store the info
-            subdict["string"] = userstring
-            subdict["lhsstring"] = parts[0].strip()
-            subdict["rhsstring"] = parts[1].strip()#TODO expand
-            subdict["rhsstring_expanded"] = self.try_expand(subdict["rhsstring"])
+                # store the info
+                subdict["string"] = userstring
+                subdict["lhsstring"] = parts[0].strip()
+                subdict["rhsstring"] = parts[1].strip()#TODO expand
+                subdict["rhsstring_expanded"] = self.try_expand(subdict["rhsstring"])
 
-            # to make the left-hand side a function on x, place " [ variablename : domainname ] " in front
-            if parts[0].find("x") > -1:
-                parts[0] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[0]
-            # right-hand side: infer type, make function if not one yet
-            if not type_is_function_from(self.get_inferred_type(subdict["theoryname"], parts[1]),
-                                         self.simdata["domain"]["name"]):
-                parts[1] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[1]
+                # to make the left-hand side a function on x, place " [ variablename : domainname ] " in front
+                if parts[0].find("x") > -1:
+                    parts[0] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[0]
+                # right-hand side: infer type, make function if not one yet
+                if not type_is_function_from(self.get_inferred_type(subdict["theoryname"], parts[1]),
+                                             self.simdata["domain"]["name"]):
+                    parts[1] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[1]
 
-            # in lhs replace all unknown names used by more generic ones and add lambda clause in front
-            for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
-                parts[0] = parts[0].replace(unkname, " any" + unkname)
-                parts[0] = " [ any" + unkname + " : " + self.simdata["unknowns"][unkname]["type"] + " ] " + parts[0]
-                # and include the original ones as theory
-                inc = self.include_in(subdict["theoryname"], unkname)
-            for parname in get_recursively(self.simdata["parameters"], "theoryname"):
-                inc = self.include_in(subdict["theoryname"], parname)
+                # in lhs replace all unknown names used by more generic ones and add lambda clause in front
+                for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
+                    parts[0] = parts[0].replace(unkname, " any" + unkname)
+                    parts[0] = " [ any" + unkname + " : " + self.simdata["unknowns"][unkname]["type"] + " ] " + parts[0]
+                    # and include the original ones as theory
+                    inc = self.include_in(subdict["theoryname"], unkname)
+                for parname in get_recursively(self.simdata["parameters"], "theoryname"):
+                    inc = self.include_in(subdict["theoryname"], parname)
 
-            # send declarations to mmt
-            self.mmtinterface.mmt_new_decl("lhs", subdict["theoryname"], " mylhs = " + parts[0])
-            reply_lhsconstant = self.mmtinterface.query_for(subdict["theoryname"])
+                # send declarations to mmt
+                self.mmtinterface.mmt_new_decl("lhs", subdict["theoryname"], " mylhs = " + parts[0])
+                reply_lhsconstant = self.mmtinterface.query_for(subdict["theoryname"])
 
-            self.mmtinterface.mmt_new_decl("rhs", subdict["theoryname"], " myrhs = " + parts[1])
-            reply_rhsconstant = self.mmtinterface.query_for(subdict["theoryname"])
+                self.mmtinterface.mmt_new_decl("rhs", subdict["theoryname"], " myrhs = " + parts[1])
+                reply_rhsconstant = self.mmtinterface.query_for(subdict["theoryname"])
 
-            # create view
-            self.new_view(subdict)
-            ltype = self.get_inferred_type(subdict["theoryname"], "mylhs")
-            eqtype = get_last_type(ltype)
-            rtype = self.get_inferred_type(subdict["theoryname"], "myrhs")
-            self.mmtinterface.mmt_new_decl("eqtype", subdict["viewname"],
-                                                                     "eqtype = " + eqtype)
-            self.mmtinterface.mmt_new_decl("lhs", subdict["viewname"],
-                                                                     "lhs = " + "mylhs")
-            self.mmtinterface.mmt_new_decl("rhs", subdict["viewname"],
-                                                                     "rhs = " + "myrhs")
-            self.mmtinterface.mmt_new_decl("pde", subdict["viewname"],
-                                                                     "pde = " + "[u](mylhs u) funcEq myrhs")
+                # create view
+                self.new_view(subdict)
+                ltype = self.get_inferred_type(subdict["theoryname"], "mylhs")
+                eqtype = get_last_type(ltype)
+                rtype = self.get_inferred_type(subdict["theoryname"], "myrhs")
+                self.mmtinterface.mmt_new_decl("eqtype", subdict["viewname"],
+                                                                         "eqtype = " + eqtype)
+                self.mmtinterface.mmt_new_decl("lhs", subdict["viewname"],
+                                                                         "lhs = " + "mylhs")
+                self.mmtinterface.mmt_new_decl("rhs", subdict["viewname"],
+                                                                         "rhs = " + "myrhs")
+                self.mmtinterface.mmt_new_decl("pde", subdict["viewname"],
+                                                                         "pde = " + "[u](mylhs u) funcEq myrhs")
 
-            reply = self.mmtinterface.query_for(subdict["theoryname"])
+                reply = self.mmtinterface.query_for(subdict["theoryname"])
 
-            for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
-                op = subdict["lhsstring"].replace(unkname, "")
-                op = op.strip()
+                for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
+                    op = subdict["lhsstring"].replace(unkname, "")
+                    op = op.strip()
 
-            # store the info
-            subdict["op"] = op
-            subdict["lhsparsestring"] = parts[0]
-            subdict["rhsparsestring"] = parts[1]
+                # store the info
+                subdict["op"] = op
+                subdict["lhsparsestring"] = parts[0]
+                subdict["rhsparsestring"] = parts[1]
 
-            # TODO query number of effective pdes and unknowns from mmt for higher dimensional PDEs
-            # => can assume each to be ==1 for now
-            numpdesgiven = len(self.simdata["pdes"]["pdes"])
-            self.poutput("Ok, " + reply.tostring())
-            if numpdesgiven == len(self.simdata["unknowns"]):
-                self.trigger('pdes_parsed')
-            elif numpdesgiven > len(self.simdata["unknowns"]):
-                self.poutput("now that's too many PDEs. Please go back and add more unknowns.")
-            else:
-                self.poutput("More PDEs, please!")
+                # TODO query number of effective pdes and unknowns from mmt for higher dimensional PDEs
+                # => can assume each to be ==1 for now
+                numpdesgiven = len(self.simdata["pdes"]["pdes"])
+                self.poutput("Ok, " + reply.tostring())
+                if numpdesgiven == len(self.simdata["unknowns"]):
+                    self.trigger('pdes_parsed')
+                elif numpdesgiven > len(self.simdata["unknowns"]):
+                    self.poutput("now that's too many PDEs. Please go back and add more unknowns.")
+                else:
+                    self.poutput("More PDEs, please!")
 
     def pdes_exit(self):
         self.poutput("These are all the PDEs needed.")
