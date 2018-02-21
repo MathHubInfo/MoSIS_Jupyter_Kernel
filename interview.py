@@ -344,9 +344,9 @@ class Interview(cmd.Cmd):
             if mmttype.inferred_type_to_string() != "type":
                 raise InterviewError("This seems to not be a type. It should be!")
             result = self.mmtinterface.query_for(subdict["theoryname"])  # if not self.cheating else
-            print(result.tostring())
+            #print(result.tostring())
             subdict["name"] = domain_name
-            (fro, to) = mmtreply.getIntervalBoundaries(result, domain_name) if not self.cheating else (0.0, 1.0)  # todo make work again
+            (fro, to) = mmtreply.getIntervalBoundaries(result, domain_name) #if not self.cheating else (0.0, 1.0)  # todo make work again
             subdict["axes"]["x_1"] = "[" + str(fro) + ";" + str(to) + "]"
             (subdict["from"], subdict["to"]) = (fro, to)
 
@@ -892,7 +892,7 @@ class Interview(cmd.Cmd):
             raise
 
     def please_prompt(self, query, if_yes, if_no=None):
-        self.poutput(str(query) + " [Y/n]? ")
+        self.poutput(str(query) + " [y/n]? ")
         self.prompted = True
         self.if_yes = if_yes
         self.if_no = if_no
@@ -911,7 +911,6 @@ class Interview(cmd.Cmd):
                     # or use as input to callback an input processing fcn..?
                     self.poutput("Please answer with Y/n")
                     return True
-                self.poutput(ret)
             self.prompted = False
             if ret:
                 self.if_yes()

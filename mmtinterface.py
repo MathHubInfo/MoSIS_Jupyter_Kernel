@@ -13,9 +13,9 @@ import _thread
 # http://docs.python-requests.org/en/master/user/quickstart/
 import requests
 from requests.utils import quote
-from urllib.parse import urlencode # is what we actually want to use
+#from urllib.parse import urlencode # is what we actually want to use
 from lxml import etree
-from openmath import openmath
+#from openmath import openmath
 
 
 def run_mmt_server():
@@ -113,12 +113,12 @@ class MMTReply:
     def getIntervalBoundaries(self, mmtreply, intervalname):
         child = mmtreply.getDefinition(intervalname)
         for oms in child.iter("{*}OMS"):
-            # print("OMS: %s - %s - %s" % (oms, oms.text, oms.keys()))
-            if (oms.get('name') == 'ccInterval'):
+            #print("OMS: %s - %s - %s" % (oms, oms.text, oms.keys()))
+            if (oms.get('name') == 'interval'):
                 a = oms.getnext()
                 b = a.getnext()
-                # print("a: %s - %s - %s" % (a, a.text, a.get('value')))
-                # print("b: %s - %s - %s" % (b, b.text, b.get('value')))
+                #print("a: %s - %s - %s" % (a, a.text, a.get('value')))
+                #print("b: %s - %s - %s" % (b, b.text, b.get('value')))
                 return (a.get('value'), b.get('value'))
 
     def tostring(self):
