@@ -14,6 +14,7 @@ from pylatexenc.latex2text import LatexNodes2Text
 import pyparsing as pp
 import re
 
+from string_handling import *
 from exaoutput import ExaOutput
 from mmtinterface import *
 
@@ -22,16 +23,6 @@ class InterviewError(Exception):
     def __init__(self, err):
         self.error = err
         super(InterviewError, self).__init__("Interview error: " + str(self.error))
-
-
-def means_no(answer):
-    try:
-        ret = strtobool(answer)
-        if ret == False:
-            return True
-    except ValueError:
-        return False
-    return False
 
 
 ###For the part of the simdata whose contents will be cleaned up if there was an error
@@ -52,7 +43,7 @@ class CriticalSubdict():
                 self.subdict[key] = self.initial_subdict[key]
             print(value)
             if isinstance(value, MMTServerError) or isinstance(value, InterviewError):
-                self.please_repeat(value)
+                self.please_repeat(value.args[0])
                 return True
             else:
                 return False
@@ -980,167 +971,6 @@ class Interview(cmd.Cmd):
             "Hello, " + self.username + "! I am " + self.myname + ", your partial differential equations and simulations expert. " \
                                                                   "Let's set up a simulation together.\n")
         self.trigger("greeting_over")
-
-
-# cf. https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
-def get_recursively(search_dict, field):
-    """
-    Takes a dict with nested lists and dicts, and searches all dicts for a key of the field provided,
-    returning a list of the values.
-    """
-    fields_found = []
-    for key, value in search_dict.items():
-        if key == field:
-            fields_found.append(value)
-        elif isinstance(value, dict):
-            results = get_recursively(value, field)
-            for result in results:
-                fields_found.append(result)
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    more_results = get_recursively(item, field)
-                    for another_result in more_results:
-                        fields_found.append(another_result)
-    return fields_found
-
-
-# """string modification functions"""
-def insert_type(string, whichtype):
-    eqidx = string.find("=")
-    if eqidx < 0:
-        raise Exception
-    if not self.has_colon(string):
-        # print('has no colon ' + equidx)
-        return string[:eqidx] + " : " + whichtype + " ❘ " + string[eqidx:]
-    return string[:eqidx] + " ❘ " + string[eqidx:]
-
-
-def type_is_function_from(type_string, from_string):
-    if type_string.startswith(from_string + " →"):
-        return True
-    if type_string.startswith("{ : " + from_string):
-        return True
-
-    from_string = make_list_of_type_symbols(from_string)
-    type_string = make_list_of_type_symbols(type_string)
-
-    if len(from_string) > len(type_string):
-        return False
-
-    for index in range(len(from_string)):
-        if from_string[index] != type_string[index]:
-            return False
-
-    return True
-
-
-def type_is_function_to(type_string, to_string):
-    if type_string.endswith("→ " + to_string):
-        return True
-    if type_string.endswith("} " + to_string):
-        return True
-    to_string = make_reverse_list_of_type_symbols(to_string)
-    type_string = make_reverse_list_of_type_symbols(type_string)
-
-    if len(to_string) > len(type_string):
-        return False
-
-    for index in range(len(to_string)):
-        if to_string[index] != type_string[index]:
-            return False
-
-    return True
-
-
-def remove_apply_brackets(string):
-    return string.split('(', 1)[0] + string.split(')', 1)[1].strip()
-
-
-def insert_before_def(string, insertstring):
-    eqidx = string.find("=")
-    if eqidx < 0:
-        raise Exception
-    return string[:eqidx + 1] + " " + insertstring + " " + string[eqidx + 1:]
-
-
-def get_first_word(string):
-    return re.split('\W+', string, 1)[0]
-
-
-def get_last_type(string):
-    string = remove_round_brackets(string)
-    string = string.rstrip()
-    return re.split('[→ \s]', string)[-1]
-
-
-def make_reverse_list_of_type_symbols(string):
-    slist = make_list_of_type_symbols(string)
-    slist.reverse()
-    return slist
-
-
-def make_list_of_type_symbols(string):
-    string = remove_arrows(remove_colons(remove_curly_brackets(remove_round_brackets(string))))
-    slist = string.split(' ')
-    slist = list(filter(lambda a: a != '', slist))
-    return slist
-
-
-def remove_round_brackets(string):
-    return string.replace(")", "").replace("(", "")
-
-
-def remove_curly_brackets(string):
-    return string.replace("{", "").replace("}", "")
-
-
-def remove_arrows(string):
-    return string.replace("→", "")
-
-
-def remove_colons(string):
-    return string.replace(":", "")
-
-
-def has_equals(self, string):
-    if string.find("=") > -1:
-        return True
-    return False
-
-
-def has_colon(string):
-    if string.find(":") > -1:
-        return True
-    return False
-
-
-def eq_to_doteq(string):
-    return string.replace("=", "≐")
-
-
-def assert_question_mark(what):
-    qmidx = what.find("?")
-    if qmidx < 0:
-        return "?" + what
-    else:
-        return what
-
-
-def add_ods(string):
-    objects = re.split(r'(\W)', string)
-    onedel = False
-    for i in range(2, len(objects)):
-        if bool(re.match('[:=]', objects[i], re.I)):  # if it starts with : or =
-            if onedel:
-                objects[i] = "❘" + objects[i]
-                return ''.join(objects)
-            onedel = True  # start only at second : or =
-    return ''.join(objects)
-
-
-def functionize(string, typename="Ω", varname="x"):
-    return string.replace("=", "= [ " + varname + " : " + typename + "]")
 
 
 if __name__ == '__main__':
