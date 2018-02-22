@@ -30,9 +30,10 @@ class Interview(cmd.Cmd):
         # Initialize cmd member variables
         self.myname = 'TheInterview'
         self.username = 'user'
-        self.intro = "Hello, " + self.username + "! I am " + self.myname + ", your partial differential equations and simulations expert. " \
-                                                                           "Let's set up a simulation together.\n" \
-                                                                           "How many dimensions does your model have?"
+        self.intro = "Hello, " + self.username + "! I am " + self.myname + \
+                     ", your partial differential equations and simulations expert. " \
+                     "Let's set up a simulation together.\n" \
+                     "Please enter anything to start the interview."
         # self.greeting()
         self.update_prompt()
 
@@ -60,33 +61,34 @@ class Interview(cmd.Cmd):
             #self.state_machine.exaout.create_output(self.state_machine.simdata)
             raise
 
-    def please_prompt(self, query, if_yes, if_no=None):
+    def please_prompt(self, query, if_yes, if_no=None, pass_other=False):
         self.poutput(str(query) + " [y/n]? ")
         self.state_machine.prompted = True
         self.state_machine.if_yes = if_yes
         self.state_machine.if_no = if_no
+        self.state_machine.pass_other = pass_other
 
     def prompt_input_handling(self, arg):
         """ If we asked for a yes-no answer, execute what was specified in please_prompt.
         return true if the input was handled here, and false if not."""
         if self.state_machine.prompted:
             if arg == "":
-                self.poutput("Yes")
                 ret = True
             else:
                 try:
                     ret = strtobool(str(arg).strip().lower())
                 except ValueError:
+                    if self.state_machine.pass_other:
+                        return False
                     # or use as input to callback an input processing fcn..?
-                    self.poutput("Please answer with Y/n")
+                    self.poutput("Please answer with y/n")
                     return True
             self.state_machine.prompted = False
             if ret:
-                self.state_machine.if_yes()
+                if self.state_machine.if_yes is not None:
+                    self.state_machine.if_yes()
             elif self.state_machine.if_no is not None:
                 self.state_machine.if_no()
-            else:
-                return False
             return True
         return False
 

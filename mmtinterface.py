@@ -142,7 +142,7 @@ class MMTInterface:
         self.extension = ':interview'
         self.URIprefix = 'http://mathhub.info/'
         self.namespace = 'MitM/smglom/calculus'  # TODO
-        self.debugprint = True
+        self.debugprint = False
 #        try:
 #            _thread.start_new_thread(run_mmt_server, ())
 #        except:

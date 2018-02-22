@@ -17,7 +17,7 @@ from pde_state_machine import *
 # This "main class" is two things: a REPL loop, by subclassing the cmd2 Cmd class
 # and a state machine as given by the pytransitions package
 class Interview(Kernel):
-    implementation = 'Echo'
+    implementation = 'Interview'
     implementation_version = '1.0'
     language = 'no-op'
     language_version = '0.1'
@@ -26,7 +26,11 @@ class Interview(Kernel):
         'mimetype': 'text/plain',
         'file_extension': '.txt',
     }
-    banner = "Echo kernel - as useful as a parrot"
+    banner = "Interview kernel\n\n" \
+             "Hello, " + "user" + "! I am " + "TheInterview" + ", your partial differential equations and simulations expert. " \
+                                                                           "Let's set up a simulation together.\n" \
+             "Please enter anything to start the interview."
+    #                                                                       "How many dimensions does your model have?" #TODO this never shows in the notebook
 
     def __init__(self, *args, **kwargs):
 
@@ -37,10 +41,12 @@ class Interview(Kernel):
 
         self.update_prompt()
         self.poutstring = ""# to collect string output to send
+        self.outstream_name = 'stdout'
 
-    def poutput(self, text):
+    def poutput(self, text, outstream_name='stdout'):
         """Accumulate the output here"""
         self.poutstring += str(text) + "\n"
+        self.outstream_name = outstream_name
 
     ############# input processing if not explain or undo
     def do_execute(self, code, silent, store_history=True, user_expressions=None,
@@ -52,10 +58,11 @@ class Interview(Kernel):
             self.state_input_handling(arg)
 
         if not silent:
-            stream_content = {'name': 'stdout', 'text': self.poutstring}
+            stream_content = {'name': self.outstream_name, 'text': self.poutstring}
             self.send_response(self.iopub_socket, 'stream', stream_content)
 
         self.poutstring = ""
+        self.outstream_name = 'stdout'
 
         return {'status': 'ok',
                 # The base class increments the execution count
@@ -70,14 +77,15 @@ class Interview(Kernel):
         try:
             self.state_machine.stateDependentInputHandling[self.state_machine.state](arg)
         except Exception as error:
-            #self.exaout.create_output(self.simdata)
+            #self.state_machine.exaout.create_output(self.simdata)
             raise
 
-    def please_prompt(self, query, if_yes, if_no=None):
+    def please_prompt(self, query, if_yes, if_no=None, pass_other=False):
         self.poutput(str(query) + " [y/n]? ")
         self.state_machine.prompted = True
         self.state_machine.if_yes = if_yes
         self.state_machine.if_no = if_no
+        self.state_machine.pass_other = pass_other
 
     def prompt_input_handling(self, arg):
         """ If we asked for a yes-no answer, execute what was specified in please_prompt.
@@ -89,16 +97,17 @@ class Interview(Kernel):
                 try:
                     ret = strtobool(str(arg).strip().lower())
                 except ValueError:
+                    if self.state_machine.pass_other:
+                        return False
                     # or use as input to callback an input processing fcn..?
                     self.poutput("Please answer with y/n")
                     return True
             self.state_machine.prompted = False
             if ret:
-                self.state_machine.if_yes()
+                if self.state_machine.if_yes is not None:
+                    self.state_machine.if_yes()
             elif self.state_machine.if_no is not None:
                 self.state_machine.if_no()
-            else:
-                return False
             return True
         return False
 

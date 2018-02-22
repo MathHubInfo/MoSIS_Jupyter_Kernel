@@ -4,9 +4,6 @@
 from transitions import Machine, State
 from collections import OrderedDict
 # strings:
-# http://mattoc.com/python-yes-no-prompt-cli.html
-from distutils.util import strtobool
-import pyparsing as pp
 import re
 
 from string_handling import *
@@ -15,17 +12,21 @@ from mmtinterface import *
 
 
 class InterviewError(Exception):
+    """Errors that occur during the course of the interview and are not due to mmt server errors"""
     def __init__(self, err):
         self.error = err
         super(InterviewError, self).__init__("Interview error: " + str(self.error))
 
 
-###For the part of the simdata whose contents will be cleaned up if there was an error
-###to be used in with statements
 class CriticalSubdict():
-    def __init__(self, subdict):
+    def __init__(self, subdict, output_function=print, outermost=True):
+        """The sub-part of subdict that needs to be restored if something goes wrong"""
+        """To be used in with-statements"""
+        """Catches errors only if it is the outermost one"""
         self.subdict = subdict
         self.initial_subdict = self.subdict.copy()
+        self.output_function = output_function
+        self.outermost = outermost
 
     def __enter__(self):
         return self.subdict
@@ -36,8 +37,8 @@ class CriticalSubdict():
             self.subdict.clear()
             for key in self.initial_subdict:
                 self.subdict[key] = self.initial_subdict[key]
-            print(value)
-            if isinstance(value, MMTServerError) or isinstance(value, InterviewError):
+            # handling: give feedback, only if our own error, and the outermost subdict
+            if (isinstance(value, MMTServerError) or isinstance(value, InterviewError)) and self.outermost:
                 self.please_repeat(value.args[0])
                 return True
             else:
@@ -48,12 +49,11 @@ class CriticalSubdict():
         append = ""
         if moreinfo:
             append = "\nDetails: " + moreinfo
-        print("I did not catch that. Could you please rephrase?" + append)
+        self.output_function("I did not catch that. Could you please rephrase?" + append, 'stderr')
 
 
-# This "main class" is two things: a REPL loop, by subclassing the cmd2 Cmd class
-# and a state machine as given by the pytransitions package
 class PDE_States:
+    """Just a state machine using pytranisitions that walks our theory graph and creates ephemeral theories"""
     def __init__(self, output_function, after_state_change_function, prompt_function):
         # just act like we were getting the right replies from MMT
         self.cheating = True
@@ -63,7 +63,7 @@ class PDE_States:
 
         # Initialize a state machine
         states = [
-            # State('greeting'),
+            State('greeting'),
             State('dimensions', on_enter=['dimensions_begin']),
             State('domain', on_enter=['domain_begin'], on_exit=['domain_exit']),
             State('unknowns', on_enter=['unknowns_begin'], on_exit=['unknowns_exit']),
@@ -79,29 +79,21 @@ class PDE_States:
         self.machine.add_ordered_transitions(
             trigger='last_state')  # TODO do something to avoid going back from the first state
         # self.to_dimensions()
-        # self.machine.add_transition(trigger='greeting_over', source='greeting', dest='dimensions')
+        self.machine.add_transition(trigger='greeting_over', source='greeting', dest='dimensions')
         self.machine.add_transition(trigger='dimensions_parsed', source='dimensions', dest='domain',
                                     before='print_empty_line')
         self.machine.add_transition(trigger='domain_parsed', source='domain', dest='unknowns',
                                     before='print_empty_line')
-        self.machine.add_transition(trigger='unknowns_parsed', source='unknowns', dest='parameters',
-                                    after='print_empty_line')
-        self.machine.add_transition(trigger='parameters_parsed', source='parameters', dest='pdes',
-                                    after='print_empty_line')
+        self.machine.add_transition(trigger='unknowns_parsed', source='unknowns', dest='parameters')
+        self.machine.add_transition(trigger='parameters_parsed', source='parameters', dest='pdes')
         self.machine.add_transition(trigger='pdes_parsed', source='pdes', dest='bcs', before='print_empty_line')
         self.machine.add_transition(trigger='bcs_parsed', source='bcs', dest='sim', before='print_empty_line')
         #self.machine.add_transition(trigger='props_parsed', source='props', dest='sim', before='print_empty_line')#TODO props
         self.machine.add_transition(trigger='sim_finished', source='sim', dest='sim', before='print_empty_line')
 
-        # Initialize cmd member variables
-        self.myname = 'TheInterview'
-        self.username = 'user'
-        self.intro = "Hello, " + self.username + "! I am " + self.myname + ", your partial differential equations and simulations expert. " \
-                                                                           "Let's set up a simulation together.\n" \
-                                                                           "How many dimensions does your model have?"
-
         # define what happens when input is received in a certain state
         self.stateDependentInputHandling = {
+            'greeting': self.greeting_handle_input,
             'dimensions': self.dimensions_handle_input,
             'domain': self.domain_handle_input,
             'unknowns': self.unknowns_handle_input,
@@ -273,12 +265,20 @@ class PDE_States:
         }
         self.exaout = ExaOutput()
 
+        """Variables to signal callbacks depending on yes/no prompts"""
         self.prompted = False
         self.if_yes = None
         self.if_no = None
+        self.pass_other = False
+
+
+    def greeting_handle_input(self, userstring):
+        self.greeting_over()
 
     ##### for state dimensions
     def dimensions_begin(self):
+        self.poutput("Hello, user! I am TheInterview, your partial differential equations and simulations expert. "
+                     "Let's set up a simulation together.")
         self.poutput("How many dimensions does your model have?")
         self.poutput("I am just assuming it's 1, since that is all we can currently handle.")  # TODO
         self.simdata["num_dimensions"] = 1
@@ -315,16 +315,15 @@ class PDE_States:
     def domain_handle_input(self, userstring):
         domain_name = get_first_word(userstring)
         # subdict = self.simdata[self.state]
-        with CriticalSubdict(self.simdata[self.state]) as subdict:
+        with CriticalSubdict(self.simdata[self.state], self.poutput) as subdict:
             parsestring = userstring
             mmtreply = self.mmtinterface.mmt_new_decl(domain_name, subdict["theoryname"], parsestring)
             mmttype = self.mmtinterface.mmt_infer_type(subdict["theoryname"], domain_name)
             if mmttype.inferred_type_to_string() != "type":
                 raise InterviewError("This seems to not be a type. It should be!")
-            result = self.mmtinterface.query_for(subdict["theoryname"])  # if not self.cheating else
-            #print(result.tostring())
+            result = self.mmtinterface.query_for(subdict["theoryname"])
             subdict["name"] = domain_name
-            (fro, to) = mmtreply.getIntervalBoundaries(result, domain_name) #if not self.cheating else (0.0, 1.0)  # todo make work again
+            (fro, to) = mmtreply.getIntervalBoundaries(result, domain_name)
             subdict["axes"]["x_1"] = "[" + str(fro) + ";" + str(to) + "]"
             (subdict["from"], subdict["to"]) = (fro, to)
 
@@ -342,7 +341,7 @@ class PDE_States:
         # (ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
 
     def domain_mmt_postamble(self):
-        with CriticalSubdict(self.simdata[self.state]) as subdict:
+        with CriticalSubdict(self.simdata[self.state], self.poutput) as subdict:
             subdict["boundary_name"] = subdict["name"] #todo
             if not self.cheating:
                 self.mmtinterface.mmt_new_decl('mydomainpred', subdict["theoryname"],
@@ -375,7 +374,7 @@ class PDE_States:
             userstring.replace(self.simdata["domain"]["name"],
                                "pred myDomainPred") if not self.cheating else userstring)
 
-        with CriticalSubdict(self.simdata[self.state]) as usubdict:
+        with CriticalSubdict(self.simdata[self.state], self.poutput) as usubdict:
             # create mmt theory with includes
             once = self.new_theory(unknown_name)
             # self.include_in(unknown_name, self.simdata["domain"]["theoryname"])
@@ -392,7 +391,7 @@ class PDE_States:
                 "type": type,
                 "codomain": type.replace(self.simdata["domain"]["name"] + " →", "", 1).strip(),
             }
-            with CriticalSubdict(self.simdata["unknowns"][unknown_name]) as subdict:
+            with CriticalSubdict(self.simdata["unknowns"][unknown_name], self.poutput, False) as subdict:
                 if self.mmtinterface.query_for(unknown_name + "_to_go_to_trash").hasDefinition(unknown_name):
                     raise InterviewError("Unknowns cannot be defined!")
                 if not type_is_function_from(subdict["type"], self.simdata["domain"]["name"]):
@@ -407,12 +406,13 @@ class PDE_States:
                 self.mmtinterface.mmt_new_decl("codomain", subdict["viewname"], "ucodomain = " + subdict["codomain"])
                 self.mmtinterface.mmt_new_decl("unktype", subdict["viewname"], "unknowntype = myUnkType")
                 self.poutput("Ok, " + userstring)
-                #if self.please_prompt("Are these all the unknowns?"): #TODO
+                #self.please_prompt("Are these all the unknowns?", lambda: self.trigger('unknowns_parsed'), pass_other=True) #TODO
                 self.trigger('unknowns_parsed')
 
     def unknowns_exit(self):
         for unknown in self.simdata["unknowns"]:
             self.poutput(self.simdata["unknowns"][unknown]["string"])
+        self.print_empty_line()
 
     ##### for state parameters
     def parameters_begin(self):
@@ -427,9 +427,9 @@ class PDE_States:
             return
 
         parameter_name = get_first_word(userstring)
-        with CriticalSubdict(self.simdata["parameters"]) as psubdict:
-            self.simdata["parameters"][parameter_name] = {}
-            with CriticalSubdict(self.simdata["parameters"][parameter_name]) as subdict:
+        with CriticalSubdict(self.simdata["parameters"], self.poutput) as psubdict:
+            psubdict[parameter_name] = {}
+            with CriticalSubdict(self.simdata["parameters"][parameter_name], self.poutput, False) as subdict:
                 # create mmt theory
                 self.new_theory(parameter_name)
                 # we might need the other parameters created so far, so use them
@@ -459,12 +459,13 @@ class PDE_States:
                 self.mmtinterface.mmt_new_decl("param", subdict["viewname"],
                                                                              "param = " + parameter_name)
                 self.poutput("Ok, " + parsestring)
-                self.please_prompt("Are these all the parameters?", lambda: self.trigger('parameters_parsed'))
+                self.please_prompt("Would you like to declare more parameters?", None, lambda: self.trigger('parameters_parsed'), True)
 
     def parameters_exit(self):
         # print(str(self.simdata["parameters"]))
         for parameter in self.simdata["parameters"]:
             self.poutput(self.simdata["parameters"][parameter]["string"])
+        self.print_empty_line()
 
     ##### for state pdes
     def pdes_begin(self):
@@ -473,9 +474,9 @@ class PDE_States:
         self.simdata["pdes"]["pdes"] = []
 
     def pdes_handle_input(self, userstring):
-        with CriticalSubdict(self.simdata["pdes"]["pdes"]) as psubdict:
-            self.simdata["pdes"]["pdes"].append({})
-            with CriticalSubdict(self.simdata["pdes"]["pdes"][-1]) as subdict:
+        with CriticalSubdict(self.simdata["pdes"]["pdes"], self.poutput) as psubdict:
+            psubdict.append({})
+            with CriticalSubdict(self.simdata["pdes"]["pdes"][-1], self.poutput, False) as subdict:
                 subdict["theoryname"] = "ephpde" + str(len(self.simdata["pdes"]["pdes"]))
                 self.new_theory(subdict["theoryname"])
 
@@ -488,8 +489,8 @@ class PDE_States:
                 # store the info
                 subdict["string"] = userstring
                 subdict["lhsstring"] = parts[0].strip()
-                subdict["rhsstring"] = parts[1].strip()#TODO expand
-                subdict["rhsstring_expanded"] = self.try_expand(subdict["rhsstring"])
+                subdict["rhsstring"] = parts[1].strip()
+                subdict["rhsstring_expanded"] = self.try_expand(subdict["rhsstring"])#TODO expand properly
 
                 # to make the left-hand side a function on x, place " [ variablename : domainname ] " in front
                 if parts[0].find("x") > -1:
@@ -557,9 +558,9 @@ class PDE_States:
     ##### for state bcs
     def bcs_begin(self):
         self.poutput("Let's discuss your boundary conditions. "
-                     "What do they look like? u(x) = f(x) or u(" + str(self.simdata["domain"]["to"]) + ") = \\alpha ?") #TODO remove square brakcets
+                     "What do they look like? u(x) = f(x) or u(" + str(self.simdata["domain"]["to"]) + ") = \\alpha ?")
         bctypetheoryname = self.redefine_bcs()
-        with CriticalSubdict(self.simdata["bcs"]) as subdict:
+        with CriticalSubdict(self.simdata["bcs"], self.poutput) as subdict:
             subdict["theoryname"] = "ephbcs"
             subdict["bcs"] = []
             self.new_theory(subdict["theoryname"])
@@ -575,7 +576,7 @@ class PDE_States:
             subdict["measure_given"] = 0
 
     def bcs_handle_input(self, userstring):
-        with CriticalSubdict(self.simdata["bcs"]) as subdict:
+        with CriticalSubdict(self.simdata["bcs"], self.poutput) as subdict:
             currentname = "bc" + str(len(subdict["bcs"]))
             subdict["bcs"].append({"name": currentname})
             # TODO use symbolic computation to order into LHS and RHS
@@ -625,7 +626,7 @@ class PDE_States:
                                                        "firstBC = solutionat " + at_x + " is " + parts[1])
                     elif len(subdict["bcs"]) == 2:
                         self.mmtinterface.mmt_new_decl("bc2", subdict["viewname"],
-                                                       "secondBC = solutionat " + at_x + " is " + parts[1]) #TODO store at and type
+                                                       "secondBC = solutionat " + at_x + " is " + parts[1])
                     else:
                         raise InterviewError("too many boundary conditions saved")
                     subdict["measure_given"] += 1
@@ -640,17 +641,18 @@ class PDE_States:
             #    self.poutput(error.args[0])
 
             self.poutput("Ok ")
-            if subdict["measure_given"] == len(self.simdata["unknowns"])*2: #TODO times order
+            if subdict["measure_given"] == len(self.simdata["unknowns"])*2: #TODO times inferred order of PDE
                 self.trigger('bcs_parsed')
             elif subdict["measure_given"] > len(self.simdata["unknowns"]):
                 raise InterviewError("now that's too many boundary conditions. ignoring last input.")
 
     def bcs_exit(self):
         self.poutput("These are all the boundary conditions needed.")
+        self.print_empty_line()
 
     def redefine_bcs(self):
         for unknown in get_recursively(self.simdata["unknowns"], "theoryname"):
-            with CriticalSubdict(self.simdata["bcs"]) as subdict:
+            with CriticalSubdict(self.simdata["bcs"], self.poutput) as subdict:
                 subdict["bctypes"] = {}
                 bctypetheoryname = unknown + "BCTypes"
                 subdict["bctypes"]["theoryname"] = bctypetheoryname
@@ -703,18 +705,19 @@ class PDE_States:
                 scala.concurrent.impl.CallbackRunnable.run(Promise.scala:60)
                 tiscaf.sync.SyncQuExecutionContext$$anon$1.run(SyncQuExecutionContext.scala:69)
                 """#TODO
-                #viewname = bctypetheoryname + "ASmBCTypes"
-                #subdict["bctypes"]["viewname"] = viewname
-                #self.mmtinterface.mmt_new_view(viewname, bctypetheoryname, "mBCTypes")
-                #self.add_list_of_declarations(viewname,
-                #                              ["DirichletBC = myDirichletBC ",
-                #                               #" = myDirichletBCfun"
-                #                               ])
+                if not self.cheating:
+                    viewname = bctypetheoryname + "ASmBCTypes"
+                    subdict["bctypes"]["viewname"] = viewname
+                    self.mmtinterface.mmt_new_view(viewname, bctypetheoryname, "mBCTypes")
+                    self.add_list_of_declarations(viewname,
+                                                  ["DirichletBC = myDirichletBC ",
+                                                   #" = myDirichletBCfun"
+                                                   ])
                 return bctypetheoryname  # Todo adapt for more than 1
 
     ##### for state props
     def props_begin(self):
-        with CriticalSubdict(self.simdata["props"]) as subdict:
+        with CriticalSubdict(self.simdata["props"], self.poutput) as subdict:
             # TODO try to find out things about the solvability ourselves
             subdict["theoryname"] = "ephBoundaryValueProblem"
             self.new_theory(subdict["theoryname"])
@@ -728,7 +731,7 @@ class PDE_States:
             self.trigger("props_parsed")
             return
 
-        with CriticalSubdict(self.simdata["props"]) as subdict:
+        with CriticalSubdict(self.simdata["props"], self.poutput) as subdict:
             #            "props": {
             #    "theoryname": "ephboundaryvalueproblem",
             #    "ops": [
@@ -827,7 +830,7 @@ class PDE_States:
     def get_inferred_type(self, in_theory, term):
         return self.mmtinterface.mmt_infer_type(in_theory, term).inferred_type_to_string()
 
-    def try_expand(self, term, in_theory=None): #TODO do using mmt definition expansion
+    def try_expand(self, term, in_theory=None): #TODO do using mmt definition expansion, issue UniFormal/MMT/issues/295
         for param in reversed(self.simdata["parameters"]):
             if term.find(param) > -1:
                 parts = self.simdata["parameters"][param]["string"].split("=")
