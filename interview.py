@@ -49,6 +49,9 @@ class Interview(cmd.Cmd):
         arg = LatexNodes2Text().latex_to_text(raw)
         # pythonic switch-case, cf. https://bytebaker.com/2008/11/03/switch-case-statement-in-python/
 
+        if arg.startswith("explain"):
+            return self.state_machine.explain()
+
         if not self.prompt_input_handling(arg):
             self.state_input_handling(arg)
 
@@ -91,15 +94,6 @@ class Interview(cmd.Cmd):
                 self.state_machine.if_no()
             return True
         return False
-
-    # called when user types 'explain [expression]'
-    def do_explain(self, expression):
-        "Explain an expression or the theoretical background to what we are currently looking for"
-        if expression:
-            explanation = "hello, " + expression  # TODO query flexiformal content through mmt
-        else:
-            explanation = 'hello'
-        self.poutput(explanation)
 
     def help_explain(self):
         self.poutput('\n'.join(['explain [expression]',

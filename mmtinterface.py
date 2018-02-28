@@ -142,7 +142,7 @@ class MMTInterface:
         self.extension = ':interview'
         self.URIprefix = 'http://mathhub.info/'
         self.namespace = 'MitM/smglom/calculus'  # TODO
-        self.debugprint = False
+        self.debugprint = True
 #        try:
 #            _thread.start_new_thread(run_mmt_server, ())
 #        except:
@@ -206,7 +206,9 @@ class MMTInterface:
         return MMTReply(False, root)
 
     def get_mpath(self, thyname):
-        mpath = self.URIprefix + self.namespace + "?" + thyname  # TODO
+        mpath = thyname
+        if not (mpath.startswith("http://") or mpath.startswith("https://")):
+            mpath = self.URIprefix + self.namespace + "?" + thyname  # TODO
         return mpath
 
     def query_for(self, thingname):
