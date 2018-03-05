@@ -133,14 +133,14 @@ def remove_colons(string):
     return string.replace(":", "")
 
 
-def has_equals(self, string):
-    if string.find("=") > -1:
+def has_equals(string):
+    if "=" in string:
         return True
     return False
 
 
 def has_colon(string):
-    if string.find(":") > -1:
+    if ":" in string:
         return True
     return False
 
@@ -150,8 +150,7 @@ def eq_to_doteq(string):
 
 
 def assert_question_mark(what):
-    qmidx = what.find("?")
-    if qmidx < 0:
+    if "?" not in what:
         return "?" + what
     else:
         return what

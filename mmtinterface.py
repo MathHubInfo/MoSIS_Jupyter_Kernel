@@ -1,4 +1,5 @@
 # to run mmt server : cf. https://docs.python.org/3/library/subprocess.html
+import psutil
 import subprocess
 # subprocess.run(["ls", "-l", "/dev/null"], stdout=subprocess.PIPE) # TODO
 import time
@@ -6,7 +7,7 @@ import time
 # mmt
 # extension info.kwarc.mmt.interviews.InterviewServer
 # server on 8080
-import _thread
+import threading
 # TODO ask dennis on whether and how to delete modules
 
 # to do http requests
@@ -18,18 +19,39 @@ from lxml import etree
 #from openmath import openmath
 
 
-def run_mmt_server():
-    #subprocess.run(["/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar", "file", "server-interview.msl"])
-    # TODO keep alive - or wait for jupyter kernel
-    process = subprocess.Popen(["/usr/bin/java", "-jar", "/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"], stdin=subprocess.PIPE, universal_newlines=True)# stdout=subprocess.PIPE)
-    time.sleep(1000)
-    process.stdin.write('server on 8080')
-    process.stdin.flush()
-    while True:
-        time.sleep(100)
-    process.stdin.close()
-    #print('Waiting for mmt to exit')
-    process.wait()
+def start_mmt_server(port_number, mmtjar="/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"):
+    subprocess.run(["/usr/bin/java", "-jar", mmtjar, "--keepalive", "\"server on " + str(port_number) + "\""],
+                               stdin=subprocess.PIPE, universal_newlines=True)
+    raise MMTServerError("MMT server terminated before rest of program")
+
+
+def start_mmt_extension(port_number, mmtjar="/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar", timeout=10.0):
+    time.sleep(0.1) # hope for server to have started communication already
+    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
+                  "extension", "info.kwarc.mmt.interviews.InterviewServer"],
+                               stdin=subprocess.PIPE, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if completed.stdout != None and "(Connection refused)" in completed.stdout:
+        if timeout > 0.0:
+            start_mmt_extension(port_number, mmtjar, timeout-0.1)
+        else:
+            raise MMTServerError("unable to start interview extension")
+
+
+def find_free_port():
+    import socket
+    s = socket.socket()
+    s.bind(('', 0))            # Bind to a free port provided by the host.
+    return s.getsockname()[1]  # Return the port number assigned.
+
+
+def run_mmt():
+    port_number = find_free_port()
+
+    t1 = threading.Thread(target=start_mmt_server, args=[port_number], daemon=True)
+    t1.start()
+    start_mmt_extension(port_number)
+
+    return port_number
 
 
 class MMTServerError(Exception):
@@ -57,9 +79,7 @@ class MMTReply:
                     self.ok = False
                     for child in element:
                         if (child.get('class')) == 'message':
-                            #print(element_to_string(self.root))
                             raise MMTServerError(child.text, element_to_string(self.root))
-                            return
         if not self.ok:
             raise MMTServerError(element_to_string(self.root))
 
@@ -137,16 +157,14 @@ def element_to_string(element):
 
 class MMTInterface:
     def __init__(self):
+        port_number = run_mmt()
         # set parameters for communication with mmt server
-        self.serverInstance = 'http://localhost:8080'
+        self.serverInstance = 'http://localhost:'+str(port_number)
         self.extension = ':interview'
         self.URIprefix = 'http://mathhub.info/'
         self.namespace = 'MitM/smglom/calculus'  # TODO
         self.debugprint = True
-#        try:
-#            _thread.start_new_thread(run_mmt_server, ())
-#        except:
-#            print("Error: unable to start mmt thread")
+
 
     def mmt_new_theory(self, thyname):
         # So, ich hab mal was zu MMT/devel gepusht. Es gibt jetzt eine Extension namens InterviewServer. Starten tut man die mit "extension info.kwarc.mmt.interviews.InterviewServer"
