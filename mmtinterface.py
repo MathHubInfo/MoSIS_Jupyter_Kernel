@@ -175,9 +175,7 @@ def element_to_string(element):
 
 
 class MMTInterface:
-    def __init__(self):
-        mmt_jar = "/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"
-        #port_number = 55555
+    def __init__(self, mmt_jar="/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"):
         port_number = run_mmt(mmt_jar)  # , port_number)
         # set parameters for communication with mmt server
         self.serverInstance = 'http://localhost:'+str(port_number)

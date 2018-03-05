@@ -5,11 +5,9 @@
 from ipykernel.kernelbase import Kernel
 
 # http://mattoc.com/python-yes-no-prompt-cli.html
-from distutils.util import strtobool
 # https://github.com/phfaist/pylatexenc for directly converting Latex commands to unicode
 from pylatexenc.latex2text import LatexNodes2Text
-import pyparsing as pp
-
+import getpass
 from pde_state_machine import *
 
 
@@ -27,7 +25,7 @@ class Interview(Kernel):
         'file_extension': '.txt',
     }
     banner = "Interview kernel\n\n" \
-             "Hello, " + "user" + "! I am " + "TheInterview" + ", your partial differential equations and simulations expert. " \
+             "Hello, " + getpass.getuser() + "! I am " + "TheInterview" + ", your partial differential equations and simulations expert. " \
                                                                            "Let's set up a simulation together.\n" \
              "Please enter anything to start the interview."
     #                                                                       "How many dimensions does your model have?" #TODO this never shows in the notebook
@@ -54,8 +52,9 @@ class Interview(Kernel):
         """This is where the user input enters our code"""
         arg = LatexNodes2Text().latex_to_text(code)
 
-        if not self.prompt_input_handling(arg):
-            self.state_input_handling(arg)
+        if not self.keyword_handling(arg):
+            if not self.prompt_input_handling(arg):
+                self.state_input_handling(arg)
 
         if not silent:
             stream_content = {'name': self.outstream_name, 'text': self.poutstring}
@@ -108,6 +107,17 @@ class Interview(Kernel):
                     self.state_machine.if_yes()
             elif self.state_machine.if_no is not None:
                 self.state_machine.if_no()
+            return True
+        return False
+
+    def keyword_handling(self, arg):
+        """ If keywords for special meta-functions are given,
+        executes the corresponding functions and returns true if it did."""
+        if arg.startswith("explain"):
+            self.state_machine.explain(arg)
+            return True
+        if arg.startswith("recap"):
+            self.state_machine.recap(arg)
             return True
         return False
 

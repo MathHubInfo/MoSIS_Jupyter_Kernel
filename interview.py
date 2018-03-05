@@ -49,11 +49,9 @@ class Interview(cmd.Cmd):
         arg = LatexNodes2Text().latex_to_text(raw)
         # pythonic switch-case, cf. https://bytebaker.com/2008/11/03/switch-case-statement-in-python/
 
-        if arg.startswith("explain"):
-            return self.state_machine.explain()
-
-        if not self.prompt_input_handling(arg):
-            self.state_input_handling(arg)
+        if not self.keyword_handling(arg):
+            if not self.prompt_input_handling(arg):
+                self.state_input_handling(arg)
 
     def state_input_handling(self, arg):
         """The standard input handling, depending on which state we are in"""
@@ -92,6 +90,17 @@ class Interview(cmd.Cmd):
                     self.state_machine.if_yes()
             elif self.state_machine.if_no is not None:
                 self.state_machine.if_no()
+            return True
+        return False
+
+    def keyword_handling(self, arg):
+        """ If keywords for special meta-functions are given,
+        executes the corresponding functions and returns true if it did."""
+        if arg.startswith("explain"):
+            self.state_machine.explain(arg)
+            return True
+        if arg.startswith("recap"):
+            self.state_machine.recap(arg)
             return True
         return False
 

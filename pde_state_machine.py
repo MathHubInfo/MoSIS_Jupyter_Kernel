@@ -3,8 +3,8 @@
 # https://github.com/pytransitions/transitions
 from transitions import Machine, State
 from collections import OrderedDict
-# strings:
-import re
+
+import getpass
 
 from string_handling import *
 from exaoutput import ExaOutput
@@ -39,17 +39,22 @@ class CriticalSubdict():
             for key in self.initial_subdict:
                 self.subdict[key] = self.initial_subdict[key]
             # handling: give feedback, only if our own error, and the outermost subdict
-            if (isinstance(value, MMTServerError) or isinstance(value, InterviewError)) and self.outermost:
+            if isinstance(value, MMTServerError) and self.outermost:
+                self.please_repeat(value.args[0], value.longerr)
+                return True
+            elif isinstance(value, InterviewError) and self.outermost:
                 self.please_repeat(value.args[0])
                 return True
             else:
                 return False
         return True
 
-    def please_repeat(self, moreinfo=None):
+    def please_repeat(self, moreinfo=None, evenmoreinfo=None):
         append = ""
         if moreinfo:
             append = "\nDetails: " + moreinfo
+        if evenmoreinfo:
+            append += ". " + evenmoreinfo
         self.output_function("I did not catch that. Could you please rephrase?" + append, 'stderr')
 
 
@@ -64,8 +69,8 @@ class PDE_States:
         self.please_prompt = prompt_function
 
         # Initialize a state machine
-        states = [
-            State('greeting'),
+        self.states = [
+            State('greeting', on_exit=['greeting_exit']),
             State('dimensions', on_enter=['dimensions_begin']),
             State('domain', on_enter=['domain_begin'], on_exit=['domain_exit']),
             State('unknowns', on_enter=['unknowns_begin'], on_exit=['unknowns_exit']),
@@ -75,9 +80,9 @@ class PDE_States:
             State('props', on_enter=['props_begin'], on_exit=['props_exit']),
             State('sim', on_enter=['sim_begin'], on_exit=['sim_exit']),
         ]
-        states.reverse()
-        self.machine = Machine(model=self, states=states, initial=states[-1],
-                               after_state_change=after_state_change_function)
+        self.states.reverse()
+        self.machine = Machine(model=self, states=self.states, initial=self.states[-1],
+                               after_state_change=after_state_change_function, queued=True)
         # this is why we were reverting the states => can always go back
         self.machine.add_ordered_transitions(
             trigger='last_state')  # TODO do something to avoid going back from the first state
@@ -277,10 +282,21 @@ class PDE_States:
     def greeting_handle_input(self, userstring):
         self.greeting_over()
 
+    def greeting_exit(self):
+        username = getpass.getuser()
+        self.poutput("Hello, " + username + "! I am TheInterview, your partial differential equations and simulations expert. "
+                     "Let's set up a simulation together.")
+        self.poutput("")
+        self.poutput("To get explanations, enter \"explain <optional keyword>\". ")
+        self.poutput("To see a recap of what we know so far, enter \"recap <optional keyword>\". ")
+        self.poutput("Otherwise, you can always try and use LaTeX-type input.")
+        self.poutput("Have a look at the currently loaded MMT theories under " + self.mmtinterface.serverInstance)
+        self.poutput("")
+        self.poutput("")
+        self.poutput("")
+
     ##### for state dimensions
     def dimensions_begin(self):
-        self.poutput("Hello, user! I am TheInterview, your partial differential equations and simulations expert. "
-                     "Let's set up a simulation together.")
         self.poutput("How many dimensions does your model have?")
         self.poutput("I am just assuming it's 1, since that is all we can currently handle.")  # TODO
         self.simdata["num_dimensions"] = 1
@@ -482,7 +498,12 @@ class PDE_States:
             psubdict.append({})
             with CriticalSubdict(self.simdata["pdes"]["pdes"][-1], self.poutput, False) as subdict:
                 subdict["theoryname"] = "ephpde" + str(len(self.simdata["pdes"]["pdes"]))
+                # create new theory including all unknowns and parameters
                 self.new_theory(subdict["theoryname"])
+                for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+                    self.include_in(subdict["theoryname"], unknownentry)
+                for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                    self.include_in(subdict["theoryname"], paramentry)
 
                 # TODO use symbolic computation to order into LHS and RHS
                 parts = re.split("=", userstring)
@@ -497,7 +518,7 @@ class PDE_States:
                 subdict["rhsstring_expanded"] = self.try_expand(subdict["rhsstring"])  # TODO expand properly
 
                 # to make the left-hand side a function on x, place " [ variablename : domainname ] " in front
-                if parts[0].find("x") > -1:
+                if "x" in parts[0]:
                     parts[0] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[0]
                 # right-hand side: infer type, make function if not one yet
                 if not type_is_function_from(self.get_inferred_type(subdict["theoryname"], parts[1]),
@@ -595,9 +616,9 @@ class PDE_States:
             subdict["bcs"][-1]["rhsstring_expanded"] = self.try_expand(subdict["bcs"][-1]["rhsstring"])
 
             # to make a function on x, place " [ variablename : boundaryname ] " in front
-            if parts[0].find("x") > -1:
+            if "x" in parts[0]:
                 parts[0] = " [ x : " + self.simdata["domain"]['boundary_name'] + " ] " + parts[0]
-            if parts[1].find("x") > -1:
+            if "x" in parts[1]:
                 parts[1] = " [ x : " + self.simdata["domain"]['boundary_name'] + " ] " + parts[1]
 
             # in lhs replace all unknown names used by more generic ones and add lambda clause in front
@@ -730,29 +751,30 @@ class PDE_States:
 
             parsestring = userstring.replace("not", "¬")
 
-            if parsestring.find("linear") > -1:
+            if "linear" in parsestring:
                 self.add_list_of_declarations(subdict["theoryname"], [
                     add_ods("user_linear : ⊦ " + parsestring + ' mylhs = sketch "user knowledge" ')
                 ])
-                if parsestring.find("¬") > -1:
+                if "¬" in parsestring:
                     subdict["ops"][-1]["linear"] = False
                 else:
                     subdict["ops"][-1]["linear"] = True
                     self.add_list_of_declarations(subdict["viewname"], [
                         "isLinear = user_linear"
                     ])
+                self.poutput("OK!")
 
             for property in ["elliptic"]:  # TODO more properties
-                if parsestring.find(property) > -1:
+                if property in parsestring:
                     self.add_list_of_declarations(subdict["theoryname"], [
                         add_ods("user_" + property + " : ⊦ " + parsestring + ' mylhs = sketch "user knowledge" ')
                     ])
                     subdict["ops"][-1]["props"].append(parsestring)
-                    if parsestring.find("¬") < 0:
+                    if "¬" not in parsestring:
                         self.add_list_of_declarations(subdict["viewname"], [
                             "isElliptic = user_elliptic"
                         ])
-            self.poutput("OK!")
+                    self.poutput("OK!")
             self.poutput("do you know anything else?")
 
     def props_exit(self):
@@ -825,9 +847,8 @@ class PDE_States:
                 except MMTServerError as error:
                     # self.poutput("no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" + "?" + re.split('AS', dictentry["viewname"])[-1] + "?")
                     # we are expecting errors if we try to include something that is not referenced in the source theory, so ignore them
-                    if error.args[0].find(
-                            "no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" +
-                            "?" + re.split('AS', current_view_name)[-1] + "?") < 1:
+                    if ("no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" +
+                            "?" + re.split('AS', current_view_name)[-1] + "?" )  in error.args[0]:
                         raise
 
     def construct_current_view_name(self, dictentry):
@@ -845,7 +866,7 @@ class PDE_States:
     def try_expand(self, term,
                    in_theory=None):  # TODO do using mmt definition expansion, issue UniFormal/MMT/issues/295
         for param in reversed(self.simdata["parameters"]):
-            if term.find(param) > -1:
+            if param in term:
                 parts = self.simdata["parameters"][param]["string"].split("=")
                 if (len(parts) != 2):
                     raise InterviewError("no definition for " + param + " given")
@@ -856,8 +877,20 @@ class PDE_States:
     def print_empty_line(self):
         self.poutput("\n")
 
-    def explain(self):
+    def explain(self, userstring=None):
         with CriticalSubdict({}, self.poutput):
             reply = self.mmtinterface.query_for(
                 "http://mathhub.info/smglom/calculus/nderivative.omdoc?nderivative?nderivative")
             self.poutput(reply.tostring())
+
+    def recap(self, userstring=None):
+        self.print_simdata()
+
+    def print_simdata(self):
+        for s in reversed(self.states):
+            state_name = s.name
+            if state_name in self.simdata:
+                self.poutput(state_name + ": " + str(self.simdata[state_name]))
+            if state_name == self.state:
+                return
+
