@@ -22,13 +22,13 @@ from lxml import etree
 
 
 def start_mmt_server(port_number, mmtjar):
-    p = subprocess.run(["/usr/bin/java", "-jar", mmtjar,  #"--file=server-interview.msl",
-                          "\"server on " + str(port_number) + "\"",
+    p = subprocess.run(["/usr/bin/java", "-jar", mmtjar, # "--file=server-interview.msl",
+                          "server", "on", str(port_number),
                           "--keepalive"],
                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out = p.stdout
-    if p.returncode != 0:
-        raise MMTServerError("Could not start the MMT server, return code " + str(p.returncode))
+    if p.returncode != 0 and p.returncode != 130:
+        raise MMTServerError("Could not start the MMT server, return code " + str(p.returncode) + ", " + str(out))
     #outs, errs = p.communicate()
     #if outs is not None:
         #print("MMT server terminated before rest of program, ")  # this just wont stay alive!!!
@@ -178,7 +178,7 @@ class MMTInterface:
     def __init__(self):
         mmt_jar = "/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"
         #port_number = 55555
-        port_number = run_mmt(mmt_jar)  #, port_number)
+        port_number = run_mmt(mmt_jar)  # , port_number)
         # set parameters for communication with mmt server
         self.serverInstance = 'http://localhost:'+str(port_number)
         self.extension = ':interview'
