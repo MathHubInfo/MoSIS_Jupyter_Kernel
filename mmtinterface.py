@@ -1,9 +1,10 @@
 # to run mmt server : cf. https://docs.python.org/3/library/subprocess.html
-import psutil
 import subprocess
-# subprocess.run(["ls", "-l", "/dev/null"], stdout=subprocess.PIPE) # TODO
+import psutil
 import time
 # for now, running
+# java -jar /home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar --file=server-interview.msl --keepalive
+# or
 # mmt
 # extension info.kwarc.mmt.interviews.InterviewServer
 # server on 8080
@@ -14,23 +15,34 @@ import threading
 # http://docs.python-requests.org/en/master/user/quickstart/
 import requests
 from requests.utils import quote
+from contextlib import closing
 #from urllib.parse import urlencode # is what we actually want to use
 from lxml import etree
 #from openmath import openmath
 
 
-def start_mmt_server(port_number, mmtjar="/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"):
-    subprocess.run(["/usr/bin/java", "-jar", mmtjar, "--keepalive", "\"server on " + str(port_number) + "\""],
-                               stdin=subprocess.PIPE, universal_newlines=True)
-    raise MMTServerError("MMT server terminated before rest of program")
+def start_mmt_server(port_number, mmtjar):
+    p = subprocess.run(["/usr/bin/java", "-jar", mmtjar,  #"--file=server-interview.msl",
+                          "\"server on " + str(port_number) + "\"",
+                          "--keepalive"],
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out = p.stdout
+    if p.returncode != 0:
+        raise MMTServerError("Could not start the MMT server, return code " + str(p.returncode))
+    #outs, errs = p.communicate()
+    #if outs is not None:
+        #print("MMT server terminated before rest of program, ")  # this just wont stay alive!!!
+        #p.terminate()
+        #raise MMTServerError("MMT server terminated before rest of program, ")  # + p.stdout)
 
 
-def start_mmt_extension(port_number, mmtjar="/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar", timeout=10.0):
-    time.sleep(0.1) # hope for server to have started communication already
+def start_mmt_extension(port_number, mmtjar, timeout=3.0):
+    time.sleep(0.1)  # hope for server to have started communication already
     completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
                   "extension", "info.kwarc.mmt.interviews.InterviewServer"],
-                               stdin=subprocess.PIPE, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if completed.stdout != None and "(Connection refused)" in completed.stdout:
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
+        print("connection refused")
         if timeout > 0.0:
             start_mmt_extension(port_number, mmtjar, timeout-0.1)
         else:
@@ -39,18 +51,25 @@ def start_mmt_extension(port_number, mmtjar="/home/freifrau/Desktop/masterarbeit
 
 def find_free_port():
     import socket
-    s = socket.socket()
-    s.bind(('', 0))            # Bind to a free port provided by the host.
-    return s.getsockname()[1]  # Return the port number assigned.
+    port_number = 0
+    while (port_number < 1024) or (8888 < port_number < 10000):
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s1:
+            s1.bind(('localhost', 0))            # Bind to a free port provided by the host.
+            port_number = s1.getsockname()[1]
+    return port_number  # Return the port number assigned.
 
 
-def run_mmt():
-    port_number = find_free_port()
+def run_mmt(mmtjar, port_number=None):
+    if port_number is None:
+        port_number = find_free_port()
 
-    t1 = threading.Thread(target=start_mmt_server, args=[port_number], daemon=True)
+    print("port_number: " + str(port_number))
+
+    t1 = threading.Thread(target=start_mmt_server, args=(port_number, mmtjar), daemon=True)
     t1.start()
-    start_mmt_extension(port_number)
-
+    #t2 = threading.Thread(target=start_mmt_extension, args=[port_number], daemon=True)
+    #t2.start()
+    start_mmt_extension(port_number, mmtjar)
     return port_number
 
 
@@ -157,7 +176,9 @@ def element_to_string(element):
 
 class MMTInterface:
     def __init__(self):
-        port_number = run_mmt()
+        mmt_jar = "/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"
+        #port_number = 55555
+        port_number = run_mmt(mmt_jar)  #, port_number)
         # set parameters for communication with mmt server
         self.serverInstance = 'http://localhost:'+str(port_number)
         self.extension = ':interview'
