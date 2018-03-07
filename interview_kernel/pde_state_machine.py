@@ -795,6 +795,65 @@ class PDE_States:
         self.exaout.create_output(self.simdata)
         self.poutput("Generated ExaStencils input.")
         # TODO generate and run simulation
+        # display solution using matplotlib
+        # cf.https://github.com/ipython/ipython/blob/6a5220d032f5a60267b051783721aa0d5a0e3373/IPython/core/magics/pylab.py
+
+        import matplotlib
+        matplotlib.use('nbagg')
+        import matplotlib.pyplot as plt
+        #from ipykernel.core import InteractiveShell
+        plt.ion()
+        #try:
+        #    gui, backend = self.shell.enable_matplotlib("nbagg")
+        #except Exception as e:
+        #    raise InterviewError("Unable to use matplotlib for display, sorry! \n" + e.args[0])
+        plt.plot([1, 2, 3])
+
+    def enable_matplotlib(self, gui=None):
+        """Enable interactive matplotlib and inline figure support.
+        stolen from
+        https://github.com/ipython/ipython/blob/35a4f43a1bbcd371d6f917e6a2c258848df6e47d/IPython/core/interactiveshell.py .
+        This takes the following steps:
+
+        1. select the appropriate eventloop and matplotlib backend
+        2. set up matplotlib for interactive use with that backend
+        3. configure formatters for inline figure display
+        4. enable the selected gui eventloop
+
+        Parameters
+        ----------
+        gui : optional, string
+          If given, dictates the choice of matplotlib GUI backend to use
+          (should be one of IPython's supported backends, 'qt', 'osx', 'tk',
+          'gtk', 'wx' or 'inline'), otherwise we use the default chosen by
+          matplotlib (as dictated by the matplotlib build-time options plus the
+          user's matplotlibrc configuration file).  Note that not all backends
+          make sense in all contexts, for example a terminal ipython can't
+          display figures inline.
+        """
+        from IPython.core import pylabtools as pt
+        gui, backend = pt.find_gui_and_backend(gui, self.pylab_gui_select)
+
+        if gui != 'inline':
+            # If we have our first gui selection, store it
+            if self.pylab_gui_select is None:
+                self.pylab_gui_select = gui
+            # Otherwise if they are different
+            elif gui != self.pylab_gui_select:
+                print('Warning: Cannot change to a different GUI toolkit: %s.'
+                      ' Using %s instead.' % (gui, self.pylab_gui_select))
+                gui, backend = pt.find_gui_and_backend(self.pylab_gui_select)
+
+        pt.activate_matplotlib(backend)
+        pt.configure_inline_support(self, backend)
+
+        # Now we must activate the gui pylab wants to use, and fix %run to take
+        # plot updates into account
+        self.enable_gui(gui)
+        self.magics_manager.registry['ExecutionMagics'].default_runner = \
+            pt.mpl_runner(self.safe_execfile)
+
+        return gui, backend
 
     def sim_ok_fd(self):
         self.simdata["sim"]["type"] = "FiniteDifferences"
@@ -847,8 +906,8 @@ class PDE_States:
                 except MMTServerError as error:
                     # self.poutput("no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" + "?" + re.split('AS', dictentry["viewname"])[-1] + "?")
                     # we are expecting errors if we try to include something that is not referenced in the source theory, so ignore them
-                    if ("no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" +
-                            "?" + re.split('AS', current_view_name)[-1] + "?" )  in error.args[0]:
+                    expected_str = "no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" + "?" + re.split('AS', current_view_name)[-1] + "?"
+                    if expected_str not in error.args[0]:
                         raise
 
     def construct_current_view_name(self, dictentry):

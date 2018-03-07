@@ -42,7 +42,6 @@ def start_mmt_extension(port_number, mmtjar, timeout=3.0):
                   "extension", "info.kwarc.mmt.interviews.InterviewServer"],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
-        print("connection refused")
         if timeout > 0.0:
             start_mmt_extension(port_number, mmtjar, timeout-0.1)
         else:

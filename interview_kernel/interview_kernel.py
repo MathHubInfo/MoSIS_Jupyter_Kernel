@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-# http://cmd2.readthedocs.io
-#import cmd2 as cmd
+import sys
+
 from ipykernel.kernelbase import Kernel
 from ipykernel.comm import CommManager
 
@@ -20,18 +20,26 @@ from pde_state_machine import *
 class Interview(MetaKernel):
     implementation = 'Interview'
     implementation_version = '1.0'
-    language = 'no-op'
+    language = 'text'
     language_version = '0.1'
     language_info = {
-        'name': 'Any text',
+        'name': 'text',
         'mimetype': 'text/plain',
         'file_extension': '.txt',
+        'help_links': MetaKernel.help_links,
     }
     banner = "Interview kernel\n\n" \
              "Hello, " + getpass.getuser() + "! I am " + "TheInterview" + ", your partial differential equations and simulations expert. " \
                                                                            "Let's set up a simulation together.\n" \
              "Please enter anything to start the interview."
-    #                                                                       "How many dimensions does your model have?" #TODO this never shows in the notebook
+
+    #kernel_json = {
+    #    "argv": [
+    #        sys.executable, "-m", "interview_kernel", "-f", "{connection_file}"],
+    #    "display_name": "Interview Kernel",
+    #    "language": "text",
+    #    "name": "interview_kernel"
+    #}
 
     def __init__(self, **kwargs):
 
