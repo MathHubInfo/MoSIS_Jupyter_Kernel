@@ -81,12 +81,7 @@ class Interview(MetaKernel):
         self.poutstring = ""
         self.outstream_name = 'stdout'
 
-        return {'status': 'ok',
-                # The base class increments the execution count
-                'execution_count': self.execution_count,
-                'payload': [],
-                'user_expressions': {},
-                }
+        return  # stream_content['text']
 
     def state_input_handling(self, arg):
         """The standard input handling, depending on which state we are in"""

@@ -181,7 +181,7 @@ class MMTInterface:
         self.extension = ':interview'
         self.URIprefix = 'http://mathhub.info/'
         self.namespace = 'MitM/smglom/calculus'  # TODO
-        self.debugprint = True
+        self.debugprint = False
 
 
     def mmt_new_theory(self, thyname):
