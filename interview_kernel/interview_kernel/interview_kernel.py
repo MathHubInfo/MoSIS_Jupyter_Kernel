@@ -3,6 +3,9 @@
 # http://cmd2.readthedocs.io
 #import cmd2 as cmd
 from ipykernel.kernelbase import Kernel
+from ipykernel.comm import CommManager
+
+from metakernel import MetaKernel
 
 # http://mattoc.com/python-yes-no-prompt-cli.html
 # https://github.com/phfaist/pylatexenc for directly converting Latex commands to unicode
@@ -14,7 +17,7 @@ from pde_state_machine import *
 
 # This "main class" is two things: a REPL loop, by subclassing the cmd2 Cmd class
 # and a state machine as given by the pytransitions package
-class Interview(Kernel):
+class Interview(MetaKernel):
     implementation = 'Interview'
     implementation_version = '1.0'
     language = 'no-op'
@@ -30,12 +33,18 @@ class Interview(Kernel):
              "Please enter anything to start the interview."
     #                                                                       "How many dimensions does your model have?" #TODO this never shows in the notebook
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
 
         self.state_machine = PDE_States(self.poutput, self.update_prompt, self.please_prompt)
 
         # call superclass constructor
-        super(Interview, self).__init__(*args, **kwargs)
+        super(Interview, self).__init__(**kwargs)
+        # cf.  https://github.com/ipython/ipykernel/blob/7d91110f8f471dbdd3ea65099abcb96a99179557/ipykernel/ipkernel.py
+        # self.comm_manager = CommManager(parent=self, kernel=self)
+
+        from IPython import get_ipython
+        from metakernel import register_ipython_magics
+        # register_ipython_magics()
 
         self.update_prompt()
         self.poutstring = ""# to collect string output to send
@@ -47,8 +56,9 @@ class Interview(Kernel):
         self.outstream_name = outstream_name
 
     ############# input processing if not explain or undo
-    def do_execute(self, code, silent, store_history=True, user_expressions=None,
-                   allow_stdin=False):
+    # def do_execute(self, code, silent=False, store_history=True, user_expressions=None,
+    #                allow_stdin=False):
+    def do_execute_direct(self, code, silent=False):
         """This is where the user input enters our code"""
         arg = LatexNodes2Text().latex_to_text(code)
 
@@ -177,5 +187,6 @@ class Interview(Kernel):
 
 
 if __name__ == '__main__':
-    from ipykernel.kernelapp import IPKernelApp
-    IPKernelApp.launch_instance(kernel_class=Interview)
+    # from ipykernel.kernelapp import IPKernelApp
+    # IPKernelApp.launch_instance(kernel_class=Interview)
+    Interview.run_as_main()
