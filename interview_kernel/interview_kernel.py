@@ -1,17 +1,13 @@
-#!/usr/bin/env python3
-
-import sys
-
-from ipykernel.kernelbase import Kernel
-from ipykernel.comm import CommManager
-
 from metakernel import MetaKernel
+from IPython.display import HTML, Javascript
+from metakernel import IPythonKernel
 
 # http://mattoc.com/python-yes-no-prompt-cli.html
 # https://github.com/phfaist/pylatexenc for directly converting Latex commands to unicode
 from pylatexenc.latex2text import LatexNodes2Text
 import getpass
 from pde_state_machine import *
+import matplotlib.pyplot as plt
 
 
 
@@ -47,11 +43,13 @@ class Interview(MetaKernel):
 
         # call superclass constructor
         super(Interview, self).__init__(**kwargs)
-        # cf.  https://github.com/ipython/ipykernel/blob/7d91110f8f471dbdd3ea65099abcb96a99179557/ipykernel/ipkernel.py
-        # self.comm_manager = CommManager(parent=self, kernel=self)
 
-        from IPython import get_ipython
-        from metakernel import register_ipython_magics
+        self.do_execute("%matplotlib nbagg")
+        plt.ion()
+
+        # To make custom magics happen, cf. https://github.com/Calysto/metakernel
+        # from IPython import get_ipython
+        # from metakernel import register_ipython_magics
         # register_ipython_magics()
 
         self.update_prompt()
@@ -68,6 +66,7 @@ class Interview(MetaKernel):
     #                allow_stdin=False):
     def do_execute_direct(self, code, silent=False):
         """This is where the user input enters our code"""
+
         arg = LatexNodes2Text().latex_to_text(code)
 
         if not self.keyword_handling(arg):
@@ -132,6 +131,12 @@ class Interview(MetaKernel):
         if arg.startswith("recap"):
             self.state_machine.recap(arg)
             return True
+        if arg.startswith("html"):
+            self.display_html()
+            return True
+        if arg.startswith("plt"):
+            self.display_plt()
+            return True
         return False
 
     # called when user types 'explain [expression]'
@@ -151,7 +156,7 @@ class Interview(MetaKernel):
     # called when user types 'undo'
     def do_undo(self, expression):
         "Go back to the last question"
-        self.trigger('last_state')
+        self.state_machine.trigger('last_state')
 
     def help_undo(self):
         self.poutput('\n'.join(['undo',
@@ -160,6 +165,11 @@ class Interview(MetaKernel):
 
     def update_prompt(self):
         self.prompt = "(" + self.state_machine.state + ")" #TODO
+
+    def do_shutdown(self, restart):
+        self.state_machine.mmtinterface.exit_mmt()
+
+        return super(Interview, self).do_shutdown(restart)
 
     # tab completion for empty lines
     def completenames(self, text, line, begidx, endidx):
@@ -187,6 +197,37 @@ class Interview(MetaKernel):
             if begidx == 0 and len(cmd_completion) == 1 and endidx == len(line):
                 cmd_completion[0] += ' '
             return cmd_completion
+
+    def display_html(self):
+        self.Display(HTML("""
+        <style type="text/css">
+              .styled-background { background-color: #ff7; }
+        </style>
+        <script>
+        if (typeof markedText !== 'undefined') {
+                markedText.clear();
+        }
+        IPython.notebook.select_prev()
+        var cell = IPython.notebook.get_selected_cell();
+        markedText = cell.code_mirror.markText({line: %s, col: %s},
+                                               {line: %s, col: %s},
+                                               {className: "styled-background"});
+        cell.show_line_numbers(1)
+        IPython.notebook.select_next()
+        </script>
+                            """ % (1, 0, 3, 0)))
+
+        othercode = """
+            <iframe>
+            ### have tgview here
+            </iframe>
+        """
+
+    def display_plt(self):
+        # plt.ion()
+        # matplotlib.use('nbagg')
+        self.Display(plt.plot([3, 8, 2, 5, 1]))
+        # plt.show() #TODO find out why there is no comm and interactive shell - and if it should be there
 
 
 if __name__ == '__main__':
