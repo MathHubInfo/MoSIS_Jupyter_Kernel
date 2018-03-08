@@ -35,6 +35,15 @@ def start_mmt_server(port_number, mmtjar):
         #p.terminate()
         #raise MMTServerError("MMT server terminated before rest of program, ")  # + p.stdout)
 
+def exit_mmt_server(port_number, mmtjar, timeout=3.0):
+    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
+                                "exit"],
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
+        if timeout > 0.0:
+            start_mmt_extension(port_number, mmtjar, timeout - 0.1)
+        else:
+            raise MMTServerError("unable to start interview extension")
 
 def start_mmt_extension(port_number, mmtjar, timeout=3.0):
     time.sleep(0.1)  # hope for server to have started communication already
@@ -61,8 +70,6 @@ def find_free_port():
 def run_mmt(mmtjar, port_number=None):
     if port_number is None:
         port_number = find_free_port()
-
-    print("port_number: " + str(port_number))
 
     t1 = threading.Thread(target=start_mmt_server, args=(port_number, mmtjar), daemon=True)
     t1.start()
@@ -175,14 +182,17 @@ def element_to_string(element):
 
 class MMTInterface:
     def __init__(self, mmt_jar="/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"):
-        port_number = run_mmt(mmt_jar)  # , port_number)
+        self.mmt_jar = mmt_jar
+        self.port_number = run_mmt(self.mmt_jar)  # , port_number)
         # set parameters for communication with mmt server
-        self.serverInstance = 'http://localhost:'+str(port_number)
+        self.serverInstance = 'http://localhost:'+str(self.port_number)
         self.extension = ':interview'
         self.URIprefix = 'http://mathhub.info/'
         self.namespace = 'MitM/smglom/calculus'  # TODO
         self.debugprint = False
 
+    def exit_mmt(self):
+        exit_mmt_server(self.port_number, self.mmt_jar)
 
     def mmt_new_theory(self, thyname):
         # So, ich hab mal was zu MMT/devel gepusht. Es gibt jetzt eine Extension namens InterviewServer. Starten tut man die mit "extension info.kwarc.mmt.interviews.InterviewServer"
