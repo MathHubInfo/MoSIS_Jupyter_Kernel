@@ -28,12 +28,8 @@ def start_mmt_server(port_number, mmtjar):
                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out = p.stdout
     if p.returncode != 0 and p.returncode != 130:
-        raise MMTServerError("Could not start the MMT server, return code " + str(p.returncode) + ", " + str(out))
-    #outs, errs = p.communicate()
-    #if outs is not None:
-        #print("MMT server terminated before rest of program, ")  # this just wont stay alive!!!
-        #p.terminate()
-        #raise MMTServerError("MMT server terminated before rest of program, ")  # + p.stdout)
+        raise MMTServerError("Server aborted, return code " + str(p.returncode) + ", " + str(out))
+
 
 def exit_mmt_server(port_number, mmtjar, timeout=3.0):
     completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
@@ -41,9 +37,10 @@ def exit_mmt_server(port_number, mmtjar, timeout=3.0):
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
         if timeout > 0.0:
-            start_mmt_extension(port_number, mmtjar, timeout - 0.1)
+            exit_mmt_server(port_number, mmtjar, timeout - 0.1)
         else:
-            raise MMTServerError("unable to start interview extension")
+            raise MMTServerError("unable to exit mmt server")
+
 
 def start_mmt_extension(port_number, mmtjar, timeout=3.0):
     time.sleep(0.1)  # hope for server to have started communication already

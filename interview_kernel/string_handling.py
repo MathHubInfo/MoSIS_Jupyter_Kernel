@@ -2,6 +2,7 @@
 
 from distutils.util import strtobool
 import re
+from urllib.parse import urlparse, urlencode, ParseResult
 
 def means_no(answer):
     try:
@@ -11,6 +12,14 @@ def means_no(answer):
     except ValueError:
         return False
     return False
+
+def build_url(baseurl, path, args_dict={}, query_dict={}):
+    # Returns a list in the structure of urlparse.ParseResult
+    url = urlparse(baseurl)
+    # construct new parseresult
+    new_url = ParseResult(url.scheme, url.netloc, path, urlencode(args_dict),
+                          urlencode(query_dict, doseq=True), url.fragment)
+    return new_url.geturl()
 
 # cf. https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
 def get_recursively(search_dict, field):

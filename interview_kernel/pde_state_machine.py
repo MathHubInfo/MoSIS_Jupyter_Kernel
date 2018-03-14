@@ -7,9 +7,14 @@ from collections import OrderedDict
 import getpass
 
 from string_handling import *
-from exaoutput import ExaOutput
+from exaoutput import ExaOutput, ExaRunner
 from mmtinterface import *
 
+from bokeh.io import output_notebook, show, export_svgs
+from bokeh.plotting import figure
+from bokeh.resources import CDN
+from bokeh.embed import file_html, components#, notebook_div
+from bokeh.models import ColumnDataSource
 
 class InterviewError(Exception):
     """Errors that occur during the course of the interview and are not due to mmt server errors"""
@@ -61,12 +66,14 @@ class CriticalSubdict():
 class PDE_States:
     """Just a state machine using pytranisitions that walks our theory graph and creates ephemeral theories and views"""
 
-    def __init__(self, output_function, after_state_change_function, prompt_function):
+    def __init__(self, output_function, after_state_change_function, prompt_function, display_html_function=None):
         # just act like we were getting the right replies from MMT
         self.cheating = True
 
+        # callback handles
         self.poutput = output_function
         self.please_prompt = prompt_function
+        self.display_html = display_html_function
 
         # Initialize a state machine
         self.states = [
@@ -297,8 +304,10 @@ class PDE_States:
         self.poutput("")
         self.poutput("To get explanations, enter \"explain <optional keyword>\". ")
         self.poutput("To see a recap of what we know so far, enter \"recap <optional keyword>\". ")
+        self.poutput("To interact with the current theory graph, enter \"tgwiev <optional theory name>\". ")
         self.poutput("Otherwise, you can always try and use LaTeX-type input.")
-        self.poutput("Have a look at the currently loaded MMT theories under " + self.mmtinterface.serverInstance)
+        self.poutput("")
+        self.poutput("You can inspect the currently loaded MMT theories under " + self.mmtinterface.serverInstance)
         self.poutput("")
         self.poutput("")
         self.poutput("")
@@ -791,7 +800,8 @@ class PDE_States:
 
     ##### for state sim
     def sim_begin(self):
-        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?",
+        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?"
+                           "If yes, you can provide a configuration name, or we'll just use your name.",
                            self.sim_ok_fd)
 
     def sim_handle_input(self, userstring):
@@ -801,9 +811,42 @@ class PDE_States:
 
     def sim_exit(self):
         # generate output
-        ExaOutput(self.simdata)
-        self.poutput("Generated ExaStencils input.")
-        # TODO generate and run simulation
+        exaout = ExaOutput(self.simdata)
+        print("Generated ExaStencils input; running ExaStencils")
+        # generate and run simulation
+        runner = ExaRunner(exaout)
+        runner.run_exastencils()
+        print("Ran ExaStencils; preparing visualization")
+        # output
+        self.display_result_as_bokeh()
+
+
+    # cf. nbviewer.jupyter.org/github/bokeh/bokeh-notebooks/blob/master/tutorial/01 - Basic Plotting.ipynb
+    def display_result_as_bokeh(self):
+
+        # create a new plot with default tools, using figure
+        p = figure(plot_width=1000, plot_height=400)
+
+        runner = ExaRunner(ExaOutput())
+        data = runner.load_data("u")
+        #source = ColumnDataSource(data=data)
+        source = ColumnDataSource(data=dict(x=[], u=[]))
+        source.data = source.from_df(data)
+        source.add(data.index, 'index')
+
+        # add a circle renderer with a size, color, and alpha
+        p.circle(x='index', y='u', size=2, line_color="navy", fill_color="orange", fill_alpha=0.5, source=source)
+        #show(p)
+
+        output_notebook()
+        # cf. http://bokeh.pydata.org/en/0.10.0/docs/user_guide/embed.html
+        self.display_html(file_html(p, CDN, "my plot"))  # show the results
+
+        # using JS requires jupyter widgets extension
+        #script, div = components(p)
+        #div = notebook_div(p)
+        #self.Display(Javascript(script + div))  # show the results
+
 
 
     def sim_ok_fd(self):
