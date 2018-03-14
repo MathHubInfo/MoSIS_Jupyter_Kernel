@@ -112,8 +112,6 @@ class PDE_States:
             'sim': self.sim_handle_input,
         }
 
-        self.mmtinterface = MMTInterface()
-
         # for ladder-like views
         self.viewfrom = OrderedDict([
             ('domain', "mDomain"),
@@ -271,13 +269,23 @@ class PDE_States:
             'props': {},
             'sim': {},
         }
-        self.exaout = ExaOutput()
 
+        self.mmtinterface = MMTInterface()
+        #with MMTInterface() as self.mmtinterface:
         """Variables to signal callbacks depending on yes/no prompts"""
         self.prompted = False
         self.if_yes = None
         self.if_no = None
         self.pass_other = False
+
+    def handle_state_dependent_input(self, userstring):
+        """The standard input handling, depending on which state we are in"""
+        # pythonic switch-case, cf. https://bytebaker.com/2008/11/03/switch-case-statement-in-python/
+        try:
+            self.stateDependentInputHandling[self.state](userstring)
+        except Exception as error:
+            #self.exaout.create_output(self.simdata)
+            raise
 
     def greeting_handle_input(self, userstring):
         self.greeting_over()
@@ -314,7 +322,7 @@ class PDE_States:
             return
         if numdim < 1:
             self.obviously_stupid_input()
-            self.exaout.create_output(self.testsimdata)
+            ExaOutput(self.testsimdata)
             self.dimensions_begin()
         elif numdim == 1:  # or self.numdim == 2:
             self.simdata["num_dimensions"] = numdim
@@ -787,20 +795,15 @@ class PDE_States:
                            self.sim_ok_fd)
 
     def sim_handle_input(self, userstring):
-        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?",
+        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?"
+                           "If yes, you can provide a configuration name, or we'll just use your name.",
                            self.sim_ok_fd)
 
     def sim_exit(self):
         # generate output
-        self.exaout.create_output(self.simdata)
+        ExaOutput(self.simdata)
         self.poutput("Generated ExaStencils input.")
         # TODO generate and run simulation
-        # display solution using matplotlib
-        import matplotlib
-        # matplotlib.use('nbagg')
-        import matplotlib.pyplot as plt
-        plt.ion()
-        plt.plot([1, 2, 3])
 
 
     def sim_ok_fd(self):

@@ -10,8 +10,14 @@ import pyparsing as pp
 
 from pde_state_machine import *
 
-# This "main class" is two things: a REPL loop, by subclassing the cmd2 Cmd class
-# and a state machine as given by the pytransitions package
+import matplotlib
+matplotlib.use('nbagg')
+import matplotlib.pyplot as plt
+from bokeh.io import output_notebook, show, export_svgs
+from bokeh.plotting import figure
+from tempfile import NamedTemporaryFile
+
+# This "main class" is a REPL loop, by subclassing the cmd2 Cmd class
 class Interview(cmd.Cmd):
     def __init__(self, *args, **kwargs):
 
@@ -155,6 +161,73 @@ class Interview(cmd.Cmd):
                                                                   "Let's set up a simulation together.\n")
         self.trigger("greeting_over")
 
+    def do_plt(self, userstring):
+        plt.ion()
+
+        plot = plt.plot([3, 8, 2, 5, 1])
+        #self.Display(plot)
+        plt.show() #TODO find out why there is no comm and interactive shell - and if it should be there
+
+        # cf. http://ipython-books.github.io/16-creating-a-simple-kernel-for-jupyter/
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot([3, 8, 2, 5, 1])
+
+        # We create a PNG out of this plot.
+        png = _to_png(fig)
+
+        with open('png.png', 'w') as f:
+            f.write(png)
+
+        # and send it along as rich content
+        self.richcontent = dict()
+
+        # We prepare the response with our rich data (the plot).
+        self.richcontent['source'] = 'kernel'
+
+        # This dictionary may contain different MIME representations of the output.
+        self.richcontent['data'] = {
+                                       'image/png': png  # TODO error: Notebook JSON is invalid: [{'image/png': ...
+                                   },
+        # We can specify the image size in the metadata field.
+        self.richcontent['metadata'] = {
+            'image/png': {
+                'width': 600,
+                'height': 400
+            }
+        }
+        self.poutput("image!")
+
+    # cf. nbviewer.jupyter.org/github/bokeh/bokeh-notebooks/blob/master/tutorial/01 - Basic Plotting.ipynb
+    def do_bokeh(self, userstring):
+        # create a new plot with default tools, using figure
+        p = figure(plot_width=400, plot_height=400)
+
+        # add a circle renderer with a size, color, and alpha
+        p.circle([1, 2, 3, 4, 5], [6, 7, 2, 4, 5], size=15, line_color="navy", fill_color="orange", fill_alpha=0.5)
+        show(p)
+        t = NamedTemporaryFile(suffix="svg")
+        p.output_backend = "svg"
+        export_svgs(p, filename=t.name)
+        svg = open(t.name).buffer
+
+        # and send it along as rich content
+        self.richcontent = dict()
+
+        # We prepare the response with our rich data (the plot).
+        self.richcontent['source'] = 'kernel'
+
+        # This dictionary may contain different MIME representations of the output.
+        self.richcontent['data'] = {
+                                       'image/svg': svg
+                                   },
+        # We can specify the image size in the metadata field.
+        self.richcontent['metadata'] = {
+            'image/svg': {
+                'width': 600,
+                'height': 400
+            }
+        }
 
 if __name__ == '__main__':
     Interview().cmdloop()

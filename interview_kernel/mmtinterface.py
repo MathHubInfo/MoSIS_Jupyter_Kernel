@@ -191,6 +191,12 @@ class MMTInterface:
         self.namespace = 'MitM/smglom/calculus'  # TODO
         self.debugprint = False
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.exit_mmt()
+
     def exit_mmt(self):
         exit_mmt_server(self.port_number, self.mmt_jar)
 

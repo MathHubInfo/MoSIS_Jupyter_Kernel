@@ -3,14 +3,17 @@ import json
 import os
 import sys
 
+from interview_kernel import Interview
+
 from jupyter_client.kernelspec import KernelSpecManager
 from IPython.utils.tempdir import TemporaryDirectory
 
-kernel_json = {
-    "argv": [sys.executable, "-m", "interview_kernel", "-f", "{connection_file}"],
-    "display_name": "Interview",
-    "language": "text",
-}
+kernel_json = Interview.kernel_json
+#{
+#    "argv": [sys.executable, "-m", "interview_kernel", "-f", "{connection_file}"],
+#    "display_name": "Interview",
+#    "language": "text",
+#}
 
 def install_my_kernel_spec(user=True, prefix=None):
     with TemporaryDirectory() as td:

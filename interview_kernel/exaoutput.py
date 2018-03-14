@@ -6,6 +6,7 @@ from pylatexenc.latexencode import utf8tolatex, utf82latex
 
 
 def remove_ensuremaths():
+    """remove ensuremath wrappers when translating back from unicode to latex"""
     thisdict = utf82latex
     for key, value in utf82latex.items():
         if value.startswith('\\ensuremath{'):
@@ -15,66 +16,60 @@ def remove_ensuremaths():
 
 
 class ExaOutput:
-    def __init__(self):
+    """generates configuration files for exastencils,
+        but only if simdata is given"""
+    def __init__(self, simdata=None, username="user", probname=None):
         remove_ensuremaths()
+        self.exastencils_path = Path("./exastencils")
 
-    def create_output(self, simdata):
-        self.filespathpre = "Configs"  # just to build paths, remove
-        self.probname = "Poisson_1D"  # just to build paths, remove
+        self.username = username
+
+        if probname is None:
+            self.probname = self.username
         #output parameters which should also be made adaptable at some point
-#        self.knowledge = OrderedDict([
-#                           ("dimensionality" , simdata["num_dimensions"]),
-#                           ("minLevel" , 1),
-#                           ("maxLevel" , 7),
-#                           ("discr_type" , simdata["sim_type"]),
-#                           ("l3tmp_generateL4" , False),
-#                           ("experimental_layerExtension" , True)
-#                           ])
         self.platform = OrderedDict([
-                            ("targetOS" , "Linux"),
-                           ("targetCompiler" , "GCC"),
-                           ("targetCompilerVersion" , 5),
-                           ("targetCompilerVersionMinor" , 4),
-                           ("simd_instructionSet" , "AVX")
+                            ("targetOS", "Linux"),
+                           ("targetCompiler", "GCC"),
+                           ("targetCompilerVersion", 5),
+                           ("targetCompilerVersionMinor", 4),
+                           ("simd_instructionSet", "AVX")
                            ])
         self.settings = OrderedDict([
-            ("user", "Guest"),
-            ("configName", "1D_FD_Poisson_fromL1"),
-            ("basePathPrefix", "./Poisson"),
-            ("l1file", "\"$configName$.exa1\""),
-            ("debugL1File", "\"../Debug/$configName$_debug.exa1\""),
-            ("debugL2File", "\"../Debug/$configName$_debug.exa2\""),
-            ("debugL3File", "\"../Debug/$configName$_debug.exa3\""),
-            ("debugL4File", "\"../Debug/$configName$_debug.exa4\""),
+            ("user", self.username),
+            ("configName", self.probname),
+            ("basePathPrefix", "./" + self.probname),
+            ("l1file", "$configName$.exa1"),
+            ("debugL1File", "../Debug/$configName$_debug.exa1"),
+            ("debugL2File", "../Debug/$configName$_debug.exa2"),
+            ("debugL3File", "../Debug/$configName$_debug.exa3"),
+            ("debugL4File", "../Debug/$configName$_debug.exa4"),
             ("htmlLogFile", "../Debug/$configName$_log.html"),
             ("outputPath", "../generated/$configName$/"),
-            ("produceHtmlLog", "true"),
-            ("timeStrategies", "true"),
+            ("produceHtmlLog", True),
+            ("timeStrategies", True),
             ("buildfileGenerators", "{ \"MakefileGenerator\" }")
         ])
-        filespath = Path(self.filespathpre).joinpath(self.settings["user"]).joinpath(self.probname)
-        self.l1file = filespath.with_suffix('.exa1')
-        self.l2file = filespath.with_suffix('.exa2')
-        self.l3file = filespath.with_suffix('.exa3')
-        self.l4file = filespath.with_suffix('.exa4')
-        ff = str(Path(self.settings["basePathPrefix"]).joinpath(self.filespathpre).joinpath(self.settings["user"]))
+        self.dirpath = self.exastencils_path.joinpath(self.probname)
+        self.filespath = self.dirpath.joinpath(self.probname)
+        ff = str(self.dirpath)
         if not os.path.exists(ff):
             try:
                 os.makedirs(ff)
             except OSError as exc:# Guard against race condition
                 if exc.errno != errno.EEXIST:
                     raise
-
-        self.create_settings()
-#        self.create_platform()
-        self.create_knowledge()
-        self.create_l1(simdata)
-#        self.create_l2(simdata)
-#        self.create_l3()
-#        self.create_l4()
+        if simdata is not None:
+            self.create_settings()
+    #        self.create_platform()
+            self.create_knowledge()
+            self.create_l1(simdata)
+            self.create_examples_list_file()
+    #        self.create_l2(simdata)
+    #        self.create_l3()
+    #        self.create_l4()
 
     def create_l1(self, simdata):
-        l1path = str(Path(self.settings["basePathPrefix"]).joinpath(self.l1file))
+        l1path = str(self.filespath.with_suffix('.exa1'))
         domain_name = utf8tolatex(simdata["domain"]["name"], non_ascii_only=True, brackets=False)
         op = utf8tolatex(simdata["pdes"]["pdes"][-1]["op"], non_ascii_only=True, brackets=False)
         bcrhs = self.replace_boundary_x(simdata["bcs"]["bcs"][-1]["rhsstring_expanded"]) #TODO expand
@@ -128,6 +123,7 @@ class ExaOutput:
                 "ApplicationHints { // alt L4Hint(s) \n"
                 "  // parameters \n"
                 "  l4_genDefaultApplication = true \n"
+                "  l4_defAppl_FieldToPrint = \"u\" \n" #TODO
                 "} \n"
            )
 
@@ -138,7 +134,7 @@ class ExaOutput:
         return string.replace("x", "vf_boundaryCoord_x")
 
     def create_l2(self, simdata):
-        l2path = str(Path(self.settings["basePathPrefix"]).joinpath(self.l2file))
+        l2path = str(self.filespath.with_suffix('.exa2'))
         with open(l2path,'w') as l2:
             l2.write(
                 "Domain global< " + simdata["domain"]["from"] + " to " + simdata["domain"]["to"] + " > \n" # TODO domain goes here
@@ -164,14 +160,14 @@ class ExaOutput:
             )
 
     def create_l3(self):
-        l3path = str(Path(self.settings["basePathPrefix"]).joinpath(self.l3file))
-        with open(l3path,'w') as l3:
+        l3path = str(self.filespath.with_suffix('.exa3'))
+        with open(l3path, 'w') as l3:
             l3.write(
                 "generate solver for Solution in solEq \n"
             )
 
     def create_l4(self):
-        l4path = str(Path(self.settings["basePathPrefix"]).joinpath(self.l4file))
+        l4path = str(self.filespath.with_suffix('.exa4'))
         with open(l4path,'w') as l4:
             l4.write(
                 "Function Application ( ) : Unit { \n"
@@ -201,25 +197,31 @@ class ExaOutput:
         return key.ljust(30) + ' = ' + val + '\n'
 
     def format_key_val(self, key, val):
-        return self.key_val(key, repr(val).replace('\'', '\"'))
+        val_repr = repr(val).replace('\'', '\"')
+        if isinstance(val, bool):
+            val_repr = val_repr.lower()
+        return self.key_val(key, val_repr)
 
     def format_key(self, key, dict):
         return self.format_key_val(key, dict[key])
 
     def create_settings(self):
-        settingspath = str(Path(self.settings["basePathPrefix"]).joinpath('settings'))
-        with open(settingspath,'w') as settingsfile:
+        settingspath = str(self.filespath) + '.settings'
+        with open(settingspath, 'w') as settingsfile:
             for key in self.settings:
-                settingsfile.write(self.format_key(key, self.settings))
+                if key == "buildfileGenerators":
+                    settingsfile.write(self.key_val(key, self.settings[key]))
+                else:
+                    settingsfile.write(self.format_key(key, self.settings))
 
     def create_platform(self):
-        platformpath = str(Path(self.settings["basePathPrefix"]).joinpath('platform'))
+        platformpath = str(self.filespath) + '.platform'
         with open(platformpath,'w') as platformfile:
             for key in self.platform:
                 platformfile.write(self.format_key(key, self.platform))
 
     def create_knowledge(self):
-        knowledgepath = str(Path(self.settings["basePathPrefix"]).joinpath('knowledge'))
+        knowledgepath = str(self.filespath) + '.knowledge'
         with open(knowledgepath,'w') as knowledgefile:
 #            for key in self.knowledge:
 #                knowledgefile.write(self.format_key(key, self.knowledge))
@@ -228,3 +230,30 @@ class ExaOutput:
                 "import '../lib/domain_onePatch.knowledge' \n"
                 "import '../lib/parallelization_pureOmp.knowledge'"
             )
+
+    def create_examples_list_file(self):
+        examples_path = str(self.exastencils_path.joinpath("examples").with_suffix('.sh'))
+        with open(examples_path, 'w') as shell_file:
+            shell_file.write(
+                "#!/usr/bin/env bash \n"\
+                "\n"
+                "\n"
+                "configList=\"\" \n"\
+                "configList+=\"{}/{} \" \n".format(self.probname, self.probname))
+
+class ExaRunner():
+    from functools import lru_cache
+
+    def __init__(self, exaout):
+        self.exaout = exaout
+
+    @lru_cache()
+    def load_data(self, data_name="u"):
+        import pandas as pd
+        data_path = self.exaout.exastencils_path.joinpath("generated").joinpath(self.exaout.probname).joinpath(data_name).with_suffix(".dat")
+        df = pd.read_csv(data_path, sep=' ', index_col=0)
+        try:
+            df.columns = ['u']
+        except ValueError:  # length mismatch because additional column of nans was read
+            df.columns = ['u', 'nan']
+        return df
