@@ -131,16 +131,16 @@ class PDE_States:
         ])
         # to include all the necessary theories every time
         self.bgthys = OrderedDict([
-            ('domain', ["mInterval", "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),
+            ('domain', ["mInterval", "http://mathhub.info/MitM/smglom/arithmetics?RealArithmetics"]),
             # new: RealArithmetics
-            ('unknowns', ["http://mathhub.info/MitM/Foundation?Strings", "ephdomain",
-                          "http://mathhub.info/MitM/smglom/calculus?higherderivative"]),
-            ('parameters', ["http://mathhub.info/MitM/smglom/arithmetics?realarith", "ephdomain",
+            ('unknowns', ["http://mathhub.info/MitM/Foundation?Strings", "ephdomain"]),
+                          #"http://mathhub.info/MitM/smglom/calculus?higherderivative"]),
+            ('parameters', ["http://mathhub.info/MitM/smglom/arithmetics?RealArithmetics", "ephdomain",
                             "http://mathhub.info/MitM/Foundation?Math"]),
             ('pdes', ["mDifferentialOperators"]),  # +params, unknowns,
             ('bcs',
              ["ephdomain", "mLinearity",
-              "http://mathhub.info/MitM/smglom/arithmetics?realarith"]),  # +params, unknowns, pdes, bctypes
+              "http://mathhub.info/MitM/smglom/arithmetics?RealArithmetics"]),  # +params, unknowns, pdes, bctypes
             ('props',
              ["mLinearity",
               "http://mathhub.info/MitM/Foundation?Strings"]),  # +bcs, pde
@@ -277,6 +277,8 @@ class PDE_States:
             'sim': {},
         }
 
+        self.exaout = None
+
         self.mmtinterface = MMTInterface()
         #with MMTInterface() as self.mmtinterface:
         """Variables to signal callbacks depending on yes/no prompts"""
@@ -304,7 +306,7 @@ class PDE_States:
         self.poutput("")
         self.poutput("To get explanations, enter \"explain <optional keyword>\". ")
         self.poutput("To see a recap of what we know so far, enter \"recap <optional keyword>\". ")
-        self.poutput("To interact with the current theory graph, enter \"tgwiev <optional theory name>\". ")
+        self.poutput("To interactively visualize ther current theory graph, enter \"tgwiev <optional theory name>\". ")
         self.poutput("Otherwise, you can always try and use LaTeX-type input.")
         self.poutput("")
         self.poutput("You can inspect the currently loaded MMT theories under " + self.mmtinterface.serverInstance)
@@ -800,21 +802,23 @@ class PDE_States:
 
     ##### for state sim
     def sim_begin(self):
-        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?"
+        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils? "
                            "If yes, you can provide a configuration name, or we'll just use your name.",
-                           self.sim_ok_fd)
+                           if_yes=self.sim_ok_fd, if_no=None, pass_other=True)
 
     def sim_handle_input(self, userstring):
-        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?"
-                           "If yes, you can provide a configuration name, or we'll just use your name.",
-                           self.sim_ok_fd)
+        self.sim_exit(userstring)
 
-    def sim_exit(self):
+    def sim_ok_fd(self):
+        self.sim_exit()
+
+    def sim_exit(self, problem_name=None):
+        self.simdata["sim"]["type"] = "FiniteDifferences"
         # generate output
-        exaout = ExaOutput(self.simdata)
+        self.exaout = ExaOutput(self.simdata, getpass.getuser(), problem_name)
         print("Generated ExaStencils input; running ExaStencils")
         # generate and run simulation
-        runner = ExaRunner(exaout)
+        runner = ExaRunner(self.exaout)
         runner.run_exastencils()
         print("Ran ExaStencils; preparing visualization")
         # output
@@ -824,18 +828,19 @@ class PDE_States:
     # cf. nbviewer.jupyter.org/github/bokeh/bokeh-notebooks/blob/master/tutorial/01 - Basic Plotting.ipynb
     def display_result_as_bokeh(self):
 
+        unknowns = [*self.simdata["unknowns"]]
+
         # create a new plot with default tools, using figure
         p = figure(plot_width=1000, plot_height=400)
 
-        runner = ExaRunner(ExaOutput())
-        data = runner.load_data("u")
-        #source = ColumnDataSource(data=data)
-        source = ColumnDataSource(data=dict(x=[], u=[]))
+        runner = ExaRunner(self.exaout)
+        data = runner.load_data(unknowns[0])  # TODO more dimensions
+        source = ColumnDataSource(data=data)
         source.data = source.from_df(data)
         source.add(data.index, 'index')
 
         # add a circle renderer with a size, color, and alpha
-        p.circle(x='index', y='u', size=2, line_color="navy", fill_color="orange", fill_alpha=0.5, source=source)
+        p.circle(x='index', y=unknowns[0], size=2, line_color="navy", fill_color="orange", fill_alpha=0.5, source=source)
         #show(p)
 
         output_notebook()
@@ -843,17 +848,11 @@ class PDE_States:
         self.display_html(file_html(p, CDN, "my plot"))  # show the results
 
         # using JS requires jupyter widgets extension
-        #script, div = components(p)
-        #div = notebook_div(p)
-        #self.Display(Javascript(script + div))  # show the results
+        # script, div = components(p)
+        # div = notebook_div(p)
+        # self.Display(Javascript(script + div))  # show the results
 
-
-
-    def sim_ok_fd(self):
-        self.simdata["sim"]["type"] = "FiniteDifferences"
-        self.sim_exit()
-
-    #### functions for user interaction
+    # functions for user interaction
     def obviously_stupid_input(self):
         self.poutput("Trying to be funny, huh?")
 

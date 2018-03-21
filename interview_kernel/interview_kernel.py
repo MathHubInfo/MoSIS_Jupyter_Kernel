@@ -210,50 +210,52 @@ class Interview(MetaKernel):
     def display_html(self, code=None):
 
         # highlight some of the code entered and show line numbers (just to play around)
-        self.Display(HTML("""
-        <style type="text/css">
-              .styled-background { background-color: #ff7; }
-        </style>
-        <script>
-        if (typeof markedText !== 'undefined') {
-                markedText.clear();
-        }
-        IPython.notebook.select_prev()
-        var cell = IPython.notebook.get_selected_cell();
-        markedText = cell.code_mirror.markText({line: %s, col: %s},
-                                               {line: %s, col: %s},
-                                               {className: "styled-background"});
-        cell.show_line_numbers(1)
-        IPython.notebook.select_next()
-        </script>
-                            """ % (1, 0, 3, 0)))
+        #self.Display(HTML("""
+        #<style type="text/css">
+        #      .styled-background { background-color: #ff7; }
+        #</style>
+        #<script>
+        #if (typeof markedText !== 'undefined') {
+        #        markedText.clear();
+        #}
+        #IPython.notebook.select_prev()
+        #var cell = IPython.notebook.get_selected_cell();
+        #markedText = cell.code_mirror.markText({line: %s, col: %s},
+        #                                       {line: %s, col: %s},
+        #                                       {className: "styled-background"});
+        #cell.show_line_numbers(1)
+        #IPython.notebook.select_next()
+        #</script>
+        #                    """ % (1, 0, 3, 0)))
 
+        output_notebook()
         if code:
             self.Display(HTML(code))
 
     def display_tgview(self, args=''):
         """displays the theory graph viewer as html, cf. https://github.com/UniFormal/TGView/wiki/"""
-        server_url = str(self.state_machine.mmtinterface.serverInstance)
-
-        args_dict = {
-            "type": "thgraph",
-        }
 
         args = args.replace("tgview ", '', 1).strip()
 
+        server_url = str(self.state_machine.mmtinterface.serverInstance)
+
+        url_args_dict = {
+            "type": "thgraph",
+        }
+
         if args == '':
-            args_dict["graphdata"] = self.state_machine.mmtinterface.URIprefix + \
-                                     self.state_machine.mmtinterface.namespace + "?u"
+            url_args_dict["graphdata"] = self.state_machine.mmtinterface.URIprefix + \
+                                     self.state_machine.mmtinterface.namespace
         else:
-            args_dict["graphdata"] = self.state_machine.mmtinterface.URIprefix + \
+            url_args_dict["graphdata"] = self.state_machine.mmtinterface.URIprefix + \
                                      self.state_machine.mmtinterface.namespace + "?" + args
 
         # if applicable, highlight the ephemeral parts https://github.com/UniFormal/TGView/issues/25
         thynames = get_recursively(self.state_machine.simdata, "theoryname")
         if thynames:
-            args_dict["highlight"] = ",".join(thynames)
+            url_args_dict["highlight"] = ",".join(thynames)
 
-        tgview_url = build_url(server_url, "graphs/tgview.html", args_dict=args_dict)
+        tgview_url = build_url(server_url, "graphs/tgview.html", args_dict=url_args_dict)
 
         code = """
             <iframe 

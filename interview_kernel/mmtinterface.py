@@ -23,11 +23,10 @@ from lxml import etree
 
 def start_mmt_server(port_number, mmtjar):
     p = subprocess.run(["/usr/bin/java", "-jar", mmtjar, # "--file=server-interview.msl",
-                          "server", "on", str(port_number),
-                          "--keepalive"],
+                          "server", "on", str(port_number), "--keepalive"],
                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out = p.stdout
-    if p.returncode != 0 and p.returncode != 130:
+    if p.returncode != 0 and p.returncode != 130:  # if not closed gracefully or through ctrl-c
         raise MMTServerError("Server aborted, return code " + str(p.returncode) + ", " + str(out))
 
 
@@ -38,8 +37,8 @@ def exit_mmt_server(port_number, mmtjar, timeout=3.0):
     if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
         if timeout > 0.0:
             exit_mmt_server(port_number, mmtjar, timeout - 0.1)
-        else:
-            raise MMTServerError("unable to exit mmt server")
+        # else:
+          #  raise MMTServerError("unable to exit mmt server")
 
 
 def start_mmt_extension(port_number, mmtjar, timeout=3.0):
@@ -192,6 +191,9 @@ class MMTInterface:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.exit_mmt()
+
+    def __del__(self):
         self.exit_mmt()
 
     def exit_mmt(self):

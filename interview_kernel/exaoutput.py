@@ -27,6 +27,9 @@ class ExaOutput:
 
         if probname is None:
             self.probname = self.username
+        else:
+            self.probname = probname
+
         #output parameters which should also be made adaptable at some point
         self.platform = OrderedDict([
                             ("targetOS", "Linux"),
@@ -73,8 +76,10 @@ class ExaOutput:
         l1path = str(self.filespath.with_suffix('.exa1'))
         domain_name = utf8tolatex(simdata["domain"]["name"], non_ascii_only=True, brackets=False)
         op = utf8tolatex(simdata["pdes"]["pdes"][-1]["op"], non_ascii_only=True, brackets=False)
-        bcrhs = self.replace_boundary_x(simdata["bcs"]["bcs"][-1]["rhsstring_expanded"]) #TODO expand
-        pderhs = simdata["pdes"]["pdes"][-1]["rhsstring_expanded"]
+        bc_rhs = self.replace_boundary_x(simdata["bcs"]["bcs"][-1]["rhsstring_expanded"]) #TODO expand
+        pde_rhs = simdata["pdes"]["pdes"][-1]["rhsstring_expanded"]
+        unknowns = [*simdata["unknowns"]]
+        first_unknown = unknowns[0]
         with open(l1path, 'w') as l1:
             l1.write(
                 "/// inline knowledge \n"
@@ -89,33 +94,33 @@ class ExaOutput:
                 " \n"
                 "Domain \Omega = ( " + str(simdata["domain"]["from"]) + ", " + str(simdata["domain"]["to"]) + " ) \n" 
                 " \n"
-                "Field f@finest \in \Omega = " + pderhs + " \n" 
-                "Field u \in \Omega = 0.0 \n" 
+                "Field f@finest \in \Omega = " + pde_rhs + " \n" 
+                "Field " + first_unknown + " \in \Omega = 0.0 \n" 
                 " \n"
-                "Field u@finest \in \partial \Omega = " + bcrhs + " \n" #"sin ( 0.5 * PI * vf_boundaryCoord_x ) \n" #TODO expand
-                "Field u@(all but finest) \in \partial \Omega = 0.0 \n"
+                "Field " + first_unknown + "@finest \in \partial \Omega = " + bc_rhs + " \n" #"sin ( 0.5 * PI * vf_boundaryCoord_x ) \n" #TODO expand
+                "Field " + first_unknown + "@(all but finest) \in \partial \Omega = 0.0 \n"
                 " \n"
                 "Operator op = " + op + " // alt: - \partial_{xx} \n" 
                 " \n"
-                "Equation uEq@finest           op * u == f \n" #insert pde
-                "Equation uEq@(all but finest) op * u == 0.0 \n"
+                "Equation " + first_unknown + "Eq@finest           op * " + first_unknown + " == f \n" #insert pde
+                "Equation " + first_unknown + "Eq@(all but finest) op * " + first_unknown + " == 0.0 \n"
                 " \n"
                 "/// configuration of inter-layer transformations \n"
                 " \n"
                 "DiscretizationHints { // alt: Discretize, L2Hint(s) \n"
                 "  f on Node \n"
-                "  u on Node \n"
+                "  " + first_unknown + " on Node \n"
                 " \n"
                 "  op on \Omega \n"
                 " \n"
-                "  uEq \n"
+                "  " + first_unknown + "Eq \n"
                 " \n"
                 "  // paramters \n"
                 "  discr_type = \"" + simdata["sim"]["type"] + "\" \n"
                 "} \n"
                 " \n"
                 "SolverHints { // alt: Solve, L3Hint(s) \n"
-                "  generate solver for u in uEq \n"
+                "  generate solver for " + first_unknown + " in " + first_unknown + "Eq \n"
                 " \n"
                 "  // parameters \n"
                 "  solver_targetResReduction = 1e-6 \n"
@@ -124,7 +129,7 @@ class ExaOutput:
                 "ApplicationHints { // alt L4Hint(s) \n"
                 "  // parameters \n"
                 "  l4_genDefaultApplication = true \n"
-                "  l4_defAppl_FieldToPrint = \"u\" \n" #TODO
+                "  l4_defAppl_FieldToPrint = \"" + unknowns[0] + "\" \n" #TODO
                 "} \n"
            )
 
@@ -258,12 +263,12 @@ class ExaRunner:
             print(out)
 
     @lru_cache()
-    def load_data(self, data_name="u"): #TODO name of unknowns
+    def load_data(self, data_name="u"):  # TODO more dimensions
         import pandas as pd
         data_path = self.exaout.exastencils_path.joinpath("generated").joinpath(self.exaout.probname).joinpath(data_name).with_suffix(".dat")
         df = pd.read_csv(data_path, sep=' ', index_col=0)
         try:
-            df.columns = ['u']
+            df.columns = [data_name]
         except ValueError:  # length mismatch because additional column of nans was read
-            df.columns = ['u', 'nan']
+            df.columns = [data_name, 'nan']
         return df
