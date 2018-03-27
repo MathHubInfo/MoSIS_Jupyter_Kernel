@@ -5,27 +5,20 @@ from os.path import join
 from metakernel import MetaKernel
 from IPython.display import HTML, Javascript
 from metakernel import IPythonKernel
+import ipywidgets as widgets
 
 # http://mattoc.com/python-yes-no-prompt-cli.html
 # https://github.com/phfaist/pylatexenc for directly converting Latex commands to unicode
 from pylatexenc.latex2text import LatexNodes2Text
 import getpass
-import matplotlib
-matplotlib.use('nbagg')
-import matplotlib.pyplot as plt
-from bokeh.io import output_notebook, show, export_svgs
-from bokeh.plotting import figure
-from bokeh.resources import CDN
-from bokeh.embed import file_html, components#, notebook_div
-from bokeh.models import ColumnDataSource
-#from tempfile import NamedTemporaryFile
+from bokeh.io import output_notebook
 
 from pde_state_machine import *
 from string_handling import build_url, get_recursively
 
 
-# This "main class" is two things: a REPL loop, by subclassing the cmd2 Cmd class
-# and a state machine as given by the pytransitions package
+"""This is a Jupyter kernel derived from MetaKernel. To use it, install it with the install.py script and run 
+"jupyter notebook --debug --NotebookApp.token='' " from terminal. """
 class Interview(MetaKernel):
     implementation = 'Interview'
     implementation_version = '1.0'
@@ -107,11 +100,12 @@ class Interview(MetaKernel):
         return  # stream_content['text']
 
     def please_prompt(self, query, if_yes, if_no=None, pass_other=False):
-        self.poutput(str(query) + " [y/n]? ")
+        self.poutput(str(query)) # + " [y/n]? ")
         self.state_machine.prompted = True
         self.state_machine.if_yes = if_yes
         self.state_machine.if_no = if_no
         self.state_machine.pass_other = pass_other
+        self.display_widget()
 
     def prompt_input_handling(self, arg):
         """ If we asked for a yes-no answer, execute what was specified in please_prompt.
@@ -151,6 +145,9 @@ class Interview(MetaKernel):
             return True
         if arg.startswith("undo"):
             self.do_undo(arg)
+            return True
+        if arg.startswith("widget"):
+            self.display_widget()
             return True
         return False
 
@@ -235,27 +232,33 @@ class Interview(MetaKernel):
     def display_tgview(self, args=''):
         """displays the theory graph viewer as html, cf. https://github.com/UniFormal/TGView/wiki/"""
 
-        args = args.replace("tgview ", '', 1).strip()
+        args = args.replace("tgview", '', 1).strip()
 
         server_url = str(self.state_machine.mmtinterface.serverInstance)
 
         url_args_dict = {
-            "type": "thgraph",
+            "type": "pgraph",
         }
 
         if args == '':
-            url_args_dict["graphdata"] = self.state_machine.mmtinterface.URIprefix + \
-                                     self.state_machine.mmtinterface.namespace
+            url_args_dict = dict(type="pgraph",
+                                 graphdata=self.state_machine.mmtinterface.namespace)
         else:
-            url_args_dict["graphdata"] = self.state_machine.mmtinterface.URIprefix + \
-                                     self.state_machine.mmtinterface.namespace + "?" + args
+            model_name = self.state_machine.generate_mpd_theories()
+            if model_name is None:  # Fallback for now, because ephemeral theories are not yet accessible to tgview
+                model_name = "Model"
+            url_args_dict = dict(type="mpd",
+                                 graphdata=self.state_machine.mmtinterface.namespace + "?" + model_name)
+
+        url_args_dict["viewOnlyMode"] = "true"
 
         # if applicable, highlight the ephemeral parts https://github.com/UniFormal/TGView/issues/25
         thynames = get_recursively(self.state_machine.simdata, "theoryname")
-        if thynames:
-            url_args_dict["highlight"] = ",".join(thynames)
+        #if thynames:
+        #    url_args_dict["highlight"] = ",".join(thynames)
 
         tgview_url = build_url(server_url, "graphs/tgview.html", args_dict=url_args_dict)
+        print(tgview_url)
 
         code = """
             <iframe 
@@ -266,6 +269,33 @@ class Interview(MetaKernel):
         """.format(tgview_url)
 
         self.display_html(code)
+
+    def display_widget(self):
+        # needs jupyter nbextension enable --py widgetsnbextension
+        from IPython.display import display
+        from IPython.core.formatters import IPythonDisplayFormatter
+        w = widgets.ToggleButton(
+            value=False,
+            description='Click me',
+            disabled=False,
+            button_style='', # 'success', 'info', 'warning', 'danger' or ''
+            tooltip='Description',
+            icon='check'
+        )
+        f = IPythonDisplayFormatter()
+        # these should all do it, but all return the same string
+        #f(w) # = "ToggleButton(value=False, description='Click me', icon='check', tooltip='Description')"
+        #self._ipy_formatter(w)  # = "
+        #display(w) # = "
+        # self.Display(w)  # = "
+        widgets.ToggleButton(
+            value=False,
+            description='Click me',
+            disabled=False,
+            button_style='',  # 'success', 'info', 'warning', 'danger' or ''
+            tooltip='Description',
+            icon='check'
+        )
 
 
 if __name__ == '__main__':

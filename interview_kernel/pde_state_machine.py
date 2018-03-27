@@ -480,7 +480,10 @@ class PDE_States:
                     parsestring = remove_apply_brackets(parsestring)
                 parsestring = functionize(parsestring, self.simdata["domain"]["name"])
                 # self.poutput(parsestring)
-                reply_pconstant = self.mmtinterface.mmt_new_decl("param", parameter_name, parsestring)
+
+                # add the quantitiy role for display as MPD
+                reply_pconstant = self.mmtinterface.mmt_new_decl("param", parameter_name, parsestring +
+                                                                 object_delimiter + " role Quantity")
                 reply_pconstant = self.mmtinterface.query_for(parameter_name)
                 subdict["theoryname"] = parameter_name
                 subdict["string"] = userstring
@@ -572,7 +575,7 @@ class PDE_States:
                 self.mmtinterface.mmt_new_decl("rhs", subdict["viewname"],
                                                "rhs = " + "myrhs")
                 self.mmtinterface.mmt_new_decl("pde", subdict["viewname"],
-                                               "pde = " + "[u](mylhs u) funcEq myrhs")
+                                               "pde = " + "[u](mylhs u) ≐ myrhs")
 
                 reply = self.mmtinterface.query_for(subdict["theoryname"])
 
@@ -852,6 +855,60 @@ class PDE_States:
         # div = notebook_div(p)
         # self.Display(Javascript(script + div))  # show the results
 
+    def generate_mpd_theories(self):
+        with CriticalSubdict({}, self.poutput):
+            # generate Laws that define the parameters, if applicable
+            for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                mpd_theory_name = "MPD_" + paramentry
+                self.mmtinterface.mmt_new_theory(mpd_theory_name)
+                self.include_in(mpd_theory_name, paramentry)
+                if self.mmtinterface.query_for(paramentry).hasDefinition(paramentry):
+                    self.add_list_of_declarations(mpd_theory_name, [
+                        "proof_" + paramentry + " : ⊦ " + self.simdata["parameters"][paramentry]["parsestring"].replace("=", "≐")
+                        + object_delimiter + " role Law"
+                    ])
+
+            # generate the Quantity of a hypothetical solution to an unknown
+            for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+                mpd_theory_name = "MPD_" + unknownentry
+                self.mmtinterface.mmt_new_theory(mpd_theory_name)
+                self.include_in(mpd_theory_name, unknownentry)
+                self.add_list_of_declarations(mpd_theory_name, [
+                    unknownentry + " : " + self.simdata["unknowns"][unknownentry]["type"]
+                    + object_delimiter + " role Quantity"
+                ])
+
+            # generate the Laws that define it, namely boundary conditions and PDEs #TODO BCs
+            for pdeentry in get_recursively(self.simdata["pdes"], "theoryname"):
+                mpd_theory_name = "MPD_" + pdeentry
+                self.mmtinterface.mmt_new_theory(mpd_theory_name)
+                self.include_in(mpd_theory_name, pdeentry)
+
+                #include all the mpd_unknowns, parameters and bcs #TODO
+                for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+                    self.include_in(mpd_theory_name, "MPD_" + unknownentry)
+
+                for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                    self.include_in(mpd_theory_name, paramentry)
+
+                self.add_list_of_declarations(mpd_theory_name, [
+                    "proof_" + pdeentry + " : ⊦ " + self.simdata["pdes"]["pdes"][pdeentry]["lhsstring"] +
+                    " ≐ " + self.simdata["pdes"]["pdes"][pdeentry]["rhsstring"]
+                    + object_delimiter + " role Law"
+                ])
+
+            # make an actual model theory that includes all of the Laws declared so far,
+            # which in turn include the Quantities
+            modelname = "Model"
+            self.mmtinterface.mmt_new_theory(modelname)
+            # include all the mpd_parameters, mpd_pdes and mpd_bcs #TODO
+            for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                self.include_in(modelname, "MPD_" + paramentry)
+            for pdeentry in get_recursively(self.simdata["pdes"], "theoryname"):
+                self.include_in(modelname, "MPD_" + pdeentry)
+
+            return modelname
+
     # functions for user interaction
     def obviously_stupid_input(self):
         self.poutput("Trying to be funny, huh?")
@@ -872,14 +929,8 @@ class PDE_States:
         return ok
 
     def new_theory(self, thyname):
-        try:
-            self.mmtinterface.mmt_new_theory(thyname)
-            return self.include_bgthys(thyname)
-        except MMTServerError as error:
-            self.poutput(error.args[0])
-            # self.poutput(error.with_traceback())
-            raise
-        # (ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
+        self.mmtinterface.mmt_new_theory(thyname)
+        return self.include_bgthys(thyname)
 
     def new_view(self, dictentry):
         """Constructs a new entry 'viewname' into the given dictionary and creates the view,
@@ -899,7 +950,7 @@ class PDE_States:
                 except MMTServerError as error:
                     # self.poutput("no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" + "?" + re.split('AS', dictentry["viewname"])[-1] + "?")
                     # we are expecting errors if we try to include something that is not referenced in the source theory, so ignore them
-                    expected_str = "no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" + "?" + re.split('AS', current_view_name)[-1] + "?"
+                    expected_str = "no backend available that is applicable to " + self.mmtinterface.namespace + "?" + re.split('AS', current_view_name)[-1] + "?"
                     if expected_str not in error.args[0]:
                         raise
 
@@ -929,13 +980,13 @@ class PDE_States:
     def print_empty_line(self):
         self.poutput("\n")
 
-    def explain(self, userstring=None):
+    def explain(self, userstring=None):  # TODO
         with CriticalSubdict({}, self.poutput):
             reply = self.mmtinterface.query_for(
                 "http://mathhub.info/smglom/calculus/nderivative.omdoc?nderivative?nderivative")
             self.poutput(reply.tostring())
 
-    def recap(self, userstring=None):
+    def recap(self, userstring=None):  # TODO
         self.print_simdata()
 
     def print_simdata(self):

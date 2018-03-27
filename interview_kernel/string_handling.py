@@ -4,6 +4,8 @@ from distutils.util import strtobool
 import re
 from urllib.parse import urlparse, urlencode, ParseResult
 
+object_delimiter = "❘"
+
 def means_no(answer):
     try:
         ret = strtobool(answer)
@@ -17,8 +19,9 @@ def build_url(baseurl, path, args_dict={}, query_dict={}):
     # Returns a list in the structure of urlparse.ParseResult
     url = urlparse(baseurl)
     # construct new parseresult
-    new_url = ParseResult(url.scheme, url.netloc, path, urlencode(args_dict),
-                          urlencode(query_dict, doseq=True), url.fragment)
+    new_url = ParseResult(url.scheme, url.netloc, path, "", urlencode(args_dict),  # todo urlencode
+                          # urlencode(query_dict, doseq=True),
+                           url.fragment)
     return new_url.geturl()
 
 # cf. https://stackoverflow.com/questions/14962485/finding-a-key-recursively-in-a-dictionary
@@ -51,8 +54,8 @@ def insert_type(string, whichtype):
         raise Exception
     if not self.has_colon(string):
         # print('has no colon ' + equidx)
-        return string[:eqidx] + " : " + whichtype + " ❘ " + string[eqidx:]
-    return string[:eqidx] + " ❘ " + string[eqidx:]
+        return string[:eqidx] + " : " + whichtype + " " + object_delimiter + " " + string[eqidx:]
+    return string[:eqidx] + " " + object_delimiter + " " + string[eqidx:]
 
 
 def type_is_function_from(type_string, from_string):
@@ -171,7 +174,7 @@ def add_ods(string):
     for i in range(2, len(objects)):
         if bool(re.match('[:=]', objects[i], re.I)):  # if it starts with : or =
             if onedel:
-                objects[i] = "❘" + objects[i]
+                objects[i] = object_delimiter + objects[i]
                 return ''.join(objects)
             onedel = True  # start only at second : or =
     return ''.join(objects)

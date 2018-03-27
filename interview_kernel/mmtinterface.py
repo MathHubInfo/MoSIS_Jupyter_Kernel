@@ -22,6 +22,7 @@ from lxml import etree
 
 
 def start_mmt_server(port_number, mmtjar):
+    """starts the mmt server as a separate subprocess"""
     p = subprocess.run(["/usr/bin/java", "-jar", mmtjar, # "--file=server-interview.msl",
                           "server", "on", str(port_number), "--keepalive"],
                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -31,20 +32,33 @@ def start_mmt_server(port_number, mmtjar):
 
 
 def exit_mmt_server(port_number, mmtjar, timeout=3.0):
+    """tries to shutdown the mmt server process"""
     completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
                                 "exit"],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
         if timeout > 0.0:
             exit_mmt_server(port_number, mmtjar, timeout - 0.1)
-        # else:
-          #  raise MMTServerError("unable to exit mmt server")
 
 
 def start_mmt_extension(port_number, mmtjar, timeout=3.0):
+    """starts the interview extension for mmt"""
     time.sleep(0.1)  # hope for server to have started communication already
     completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
                   "extension", "info.kwarc.mmt.interviews.InterviewServer"],
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
+        if timeout > 0.0:
+            start_mmt_extension(port_number, mmtjar, timeout-0.1)
+        else:
+            raise MMTServerError("unable to start interview extension")
+
+
+def start_mmt_relational_reader(port_number, mmtjar, timeout=3.0):
+    """starts the relational reader mmt server extension, which is required for some tgview graph types
+            attention: this loads everything in the local mathhub folder, can take some time depending on your files"""
+    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
+                  "extension", "info.kwarc.mmt.api.ontology.RelationalReader"],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
         if timeout > 0.0:
@@ -69,9 +83,12 @@ def run_mmt(mmtjar, port_number=None):
 
     t1 = threading.Thread(target=start_mmt_server, args=(port_number, mmtjar), daemon=True)
     t1.start()
+
+    start_mmt_extension(port_number, mmtjar)
+    start_mmt_relational_reader(port_number, mmtjar)
+
     #t2 = threading.Thread(target=start_mmt_extension, args=[port_number], daemon=True)
     #t2.start()
-    start_mmt_extension(port_number, mmtjar)
     return port_number
 
 
@@ -184,7 +201,7 @@ class MMTInterface:
         self.serverInstance = 'http://localhost:'+str(self.port_number)
         self.extension = ':interview'
         self.URIprefix = 'http://mathhub.info/'
-        self.namespace = 'MitM/smglom/calculus'  # TODO
+        self.namespace = self.URIprefix + 'MitM/smglom/calculus/differentialequations'  # TODO
         self.debugprint = False
 
     def __enter__(self):
@@ -259,7 +276,7 @@ class MMTInterface:
     def get_mpath(self, thyname):
         mpath = thyname
         if not (mpath.startswith("http://") or mpath.startswith("https://")):
-            mpath = self.URIprefix + self.namespace + "?" + thyname  # TODO
+            mpath = self.namespace + "?" + thyname  # TODO
         return mpath
 
     def query_for(self, thingname):
