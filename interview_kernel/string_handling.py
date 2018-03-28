@@ -46,6 +46,8 @@ def get_recursively(search_dict, field):
                         fields_found.append(another_result)
     return fields_found
 
+def get_first_key(ordered_dict):
+    return list(ordered_dict.keys())[0]
 
 # """string modification functions"""
 def insert_type(string, whichtype):
@@ -182,3 +184,6 @@ def add_ods(string):
 
 def functionize(string, typename="Ω", varname="x"):
     return string.replace("=", "= [ " + varname + " : " + typename + "]")
+
+def split_string_at_AS(string):
+    return re.split('AS', string)

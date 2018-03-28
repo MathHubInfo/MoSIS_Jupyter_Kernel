@@ -5,8 +5,9 @@ from transitions import Machine, State
 from collections import OrderedDict
 
 import getpass
+import re
 
-from string_handling import *
+import string_handling
 from exaoutput import ExaOutput, ExaRunner
 from mmtinterface import *
 
@@ -300,24 +301,27 @@ class PDE_States:
         self.greeting_over()
 
     def greeting_exit(self):
-        username = getpass.getuser()
-        self.poutput("Hello, " + username + "! I am TheInterview, your partial differential equations and simulations expert. "
-                     "Let's set up a simulation together.")
-        self.poutput("")
-        self.poutput("To get explanations, enter \"explain <optional keyword>\". ")
-        self.poutput("To see a recap of what we know so far, enter \"recap <optional keyword>\". ")
-        self.poutput("To interactively visualize ther current theory graph, enter \"tgwiev <optional theory name>\". ")
-        self.poutput("Otherwise, you can always try and use LaTeX-type input.")
-        self.poutput("")
-        self.poutput("You can inspect the currently loaded MMT theories under " + self.mmtinterface.serverInstance)
-        self.poutput("")
-        self.poutput("")
-        self.poutput("")
+        # username = getpass.getuser()
+        # self.poutput("Hello, " + username + "! I am TheInterview, your partial differential equations and simulations expert. "
+        #              "Let's set up a simulation together.")
+        # self.poutput("")
+        # self.poutput("To get explanations, enter \"explain <optional keyword>\". ")
+        # self.poutput("To see a recap of what we know so far, enter \"recap <optional keyword>\". ")
+        # self.poutput("To interactively visualize ther current theory graph, enter \"tgwiev <optional theory name>\". ")
+        # self.poutput("Otherwise, you can always try and use LaTeX-type input.")
+        # self.poutput("")
+        # self.poutput("You can inspect the currently loaded MMT theories under " + self.mmtinterface.serverInstance)
+        # self.poutput("")
+        # self.poutput("")
+        # self.poutput("")
+        return
 
     ##### for state dimensions
     def dimensions_begin(self):
         self.poutput("How many dimensions does your model have?")
+        self.print_empty_line()
         self.poutput("I am just assuming it's 1, since that is all we can currently handle.")  # TODO
+        self.print_empty_line()
         self.simdata["num_dimensions"] = 1
         self.dimensions_parsed()
 
@@ -344,13 +348,13 @@ class PDE_States:
 
     ##### for state domain
     def domain_begin(self):
-        self.poutput("What is the domain you would like to simulate for?     Ω : type ❘ = [?;?], e.g. Ω = [0.0;1.0]")
-        self.poutput("By the way, you can always try and use LaTeX-type input.")
+        self.poutput("What is the domain in your model?     Ω : type ❘ = [?;?], e.g. `\\Omega = [0.0;1.0]`")
+        # self.poutput("By the way, you can always try and use LaTeX-type input.")
         self.simdata[self.state]["axes"] = OrderedDict()
         self.domain_mmt_preamble()
 
     def domain_handle_input(self, userstring):
-        domain_name = get_first_word(userstring)
+        domain_name = string_handling.get_first_word(userstring)
         # subdict = self.simdata[self.state]
         with CriticalSubdict(self.simdata[self.state], self.poutput) as subdict:
             parsestring = userstring
@@ -361,10 +365,10 @@ class PDE_States:
             result = self.mmtinterface.query_for(subdict["theoryname"])
             subdict["name"] = domain_name
             (fro, to) = mmtreply.getIntervalBoundaries(result, domain_name)
-            subdict["axes"]["x_1"] = "[" + str(fro) + ";" + str(to) + "]"
+            subdict["axes"]["x"] = "[" + str(fro) + ";" + str(to) + "]"
             (subdict["from"], subdict["to"]) = (fro, to)
 
-            self.poutput("we will just assume that the variable is called x for now.")
+            self.poutput("we will just assume that the variable is called " + string_handling.get_first_key(subdict["axes"]) + " for now.")
             # mmtreply = self.mmtinterface.mmt_new_decl(domain_name, subdict["theoryname"], "x : " + domain_name)
             self.trigger('domain_parsed')
 
@@ -405,7 +409,7 @@ class PDE_States:
         self.simdata["unknowns"] = OrderedDict()
 
     def unknowns_handle_input(self, userstring):
-        unknown_name = get_first_word(userstring)
+        unknown_name = string_handling.get_first_word(userstring)
         # replace interval with domain
         parsestring = (
             userstring.replace(self.simdata["domain"]["name"],
@@ -431,7 +435,7 @@ class PDE_States:
             with CriticalSubdict(self.simdata["unknowns"][unknown_name], self.poutput, False) as subdict:
                 if self.mmtinterface.query_for(unknown_name + "_to_go_to_trash").hasDefinition(unknown_name):
                     raise InterviewError("Unknowns cannot be defined!")
-                if not type_is_function_from(subdict["type"], self.simdata["domain"]["name"]):
+                if not string_handling.type_is_function_from(subdict["type"], self.simdata["domain"]["name"]):
                     raise InterviewError("Unknown should be a function on " + self.simdata["domain"]["name"] + "!")
 
                 # add unknown's type as constant
@@ -459,31 +463,31 @@ class PDE_States:
 
     def parameters_handle_input(self, userstring):
         # self.poutput ("parameterinput "+ userstring)
-        if means_no(userstring):
+        if string_handling.means_no(userstring):
             self.trigger('parameters_parsed')
             return
 
-        parameter_name = get_first_word(userstring)
+        parameter_name = string_handling.get_first_word(userstring)
         with CriticalSubdict(self.simdata["parameters"], self.poutput) as psubdict:
             psubdict[parameter_name] = {}
             with CriticalSubdict(self.simdata["parameters"][parameter_name], self.poutput, False) as subdict:
                 # create mmt theory
                 self.new_theory(parameter_name)
                 # we might need the other parameters created so far, so use them
-                for otherparamentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                for otherparamentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                     self.include_in(parameter_name, otherparamentry)
 
                 # sanitize userstring - check if this works for all cases
-                parsestring = add_ods(userstring)
+                parsestring = string_handling.add_ods(userstring)
                 if parsestring.startswith(parameter_name + "(") or parsestring.startswith(
                         parameter_name + " ("):  # todo make smarter for more dimensions
-                    parsestring = remove_apply_brackets(parsestring)
-                parsestring = functionize(parsestring, self.simdata["domain"]["name"])
+                    parsestring = string_handling.remove_apply_brackets(parsestring)
+                parsestring = string_handling.functionize(parsestring, self.simdata["domain"]["name"])
                 # self.poutput(parsestring)
 
                 # add the quantitiy role for display as MPD
                 reply_pconstant = self.mmtinterface.mmt_new_decl("param", parameter_name, parsestring +
-                                                                 object_delimiter + " role Quantity")
+                                                                 string_handling.object_delimiter + " role Quantity")
                 reply_pconstant = self.mmtinterface.query_for(parameter_name)
                 subdict["theoryname"] = parameter_name
                 subdict["string"] = userstring
@@ -522,9 +526,9 @@ class PDE_States:
                 subdict["theoryname"] = "ephpde" + str(len(self.simdata["pdes"]["pdes"]))
                 # create new theory including all unknowns and parameters
                 self.new_theory(subdict["theoryname"])
-                for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+                for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                     self.include_in(subdict["theoryname"], unknownentry)
-                for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                     self.include_in(subdict["theoryname"], paramentry)
 
                 # TODO use symbolic computation to order into LHS and RHS
@@ -543,17 +547,17 @@ class PDE_States:
                 if "x" in parts[0]:
                     parts[0] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[0]
                 # right-hand side: infer type, make function if not one yet
-                if not type_is_function_from(self.get_inferred_type(subdict["theoryname"], parts[1]),
+                if not string_handling.type_is_function_from(self.get_inferred_type(subdict["theoryname"], parts[1]),
                                              self.simdata["domain"]["name"]):
                     parts[1] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[1]
 
                 # in lhs replace all unknown names used by more generic ones and add lambda clause in front
-                for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
+                for unkname in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                     parts[0] = parts[0].replace(unkname, " any" + unkname)
                     parts[0] = " [ any" + unkname + " : " + self.simdata["unknowns"][unkname]["type"] + " ] " + parts[0]
                     # and include the original ones as theory
                     inc = self.include_in(subdict["theoryname"], unkname)
-                for parname in get_recursively(self.simdata["parameters"], "theoryname"):
+                for parname in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                     inc = self.include_in(subdict["theoryname"], parname)
 
                 # send declarations to mmt
@@ -566,7 +570,7 @@ class PDE_States:
                 # create view
                 self.new_view(subdict)
                 ltype = self.get_inferred_type(subdict["theoryname"], "mylhs")
-                eqtype = get_last_type(ltype)
+                eqtype = string_handling.get_last_type(ltype)
                 rtype = self.get_inferred_type(subdict["theoryname"], "myrhs")
                 self.mmtinterface.mmt_new_decl("eqtype", subdict["viewname"],
                                                "eqtype = " + eqtype)
@@ -579,7 +583,7 @@ class PDE_States:
 
                 reply = self.mmtinterface.query_for(subdict["theoryname"])
 
-                for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
+                for unkname in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                     op = subdict["lhsstring"].replace(unkname, "")
                     op = op.strip()
 
@@ -612,11 +616,11 @@ class PDE_States:
             subdict["bcs"] = []
             self.new_theory(subdict["theoryname"])
             # apparently, need to include everything explicitly so that view works
-            for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+            for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                 self.include_in(subdict["theoryname"], unknownentry)
-            for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+            for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                 self.include_in(subdict["theoryname"], paramentry)
-            for pdeentry in get_recursively(self.simdata["pdes"], "theoryname"):
+            for pdeentry in string_handling.get_recursively(self.simdata["pdes"], "theoryname"):
                 self.include_in(subdict["theoryname"], pdeentry)
             self.include_in(subdict["theoryname"], bctypetheoryname)
             self.new_view(subdict)
@@ -644,16 +648,16 @@ class PDE_States:
                 parts[1] = " [ x : " + self.simdata["domain"]['boundary_name'] + " ] " + parts[1]
 
             # in lhs replace all unknown names used by more generic ones and add lambda clause in front
-            for unkname in get_recursively(self.simdata["unknowns"], "theoryname"):
+            for unkname in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                 parts[0] = parts[0].replace(unkname, " any" + unkname)
                 parts[0] = " [ any" + unkname + " : " + self.simdata["unknowns"][unkname]["type"] + " ] " + parts[0]
 
                 type = self.get_inferred_type(subdict["theoryname"], parts[0])
-                if type_is_function_to(type, self.simdata["unknowns"][unkname]["type"]):
+                if string_handling.type_is_function_to(type, self.simdata["unknowns"][unkname]["type"]):
                     # right-hand side: infer type, make function if not one yet
                     rhstype = self.get_inferred_type(subdict["theoryname"], parts[1])
-                    if not type_is_function_from(rhstype, self.simdata["domain"]["name"]) \
-                            and not type_is_function_from(rhstype, self.simdata["domain"]["boundary_name"]):
+                    if not string_handling.type_is_function_from(rhstype, self.simdata["domain"]["name"]) \
+                            and not string_handling.type_is_function_from(rhstype, self.simdata["domain"]["boundary_name"]):
                         parts[1] = " [ x : " + self.simdata["domain"]["boundary_name"] + " ] " + parts[1]
                     self.add_list_of_declarations(subdict["viewname"], [
                         "firstBC = myDirichletBCfun " + parts[1],
@@ -663,7 +667,7 @@ class PDE_States:
                     subdict["bcs"][-1]["on"] = "x",
                     subdict["bcs"][-1]["measure"] = 2,
                     subdict["measure_given"] = 2
-                elif type_is_function_to(type, self.simdata["unknowns"][unkname]["codomain"]):
+                elif string_handling.type_is_function_to(type, self.simdata["unknowns"][unkname]["codomain"]):
                     # at_x = re.split('[\(\)]', subdict["bcs"][-1]["lhsstring"])[-1] #TODO
                     at_x = subdict["bcs"][-1]["lhsstring"].split('(', 1)[1].split(')')[0].strip()
                     if at_x != self.simdata["domain"]["from"] and at_x != self.simdata["domain"]["to"]:
@@ -700,7 +704,7 @@ class PDE_States:
         self.print_empty_line()
 
     def redefine_bcs(self):
-        for unknown in get_recursively(self.simdata["unknowns"], "theoryname"):
+        for unknown in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
             with CriticalSubdict(self.simdata["bcs"], self.poutput) as subdict:
                 subdict["bctypes"] = {}
                 bctypetheoryname = unknown + "BCTypes"
@@ -743,11 +747,11 @@ class PDE_States:
             subdict["theoryname"] = "ephBoundaryValueProblem"
             self.new_theory(subdict["theoryname"])
             # apparently, need to include everything explicitly so that view works
-            for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+            for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                 self.include_in(subdict["theoryname"], unknownentry)
-            for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+            for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                 self.include_in(subdict["theoryname"], paramentry)
-            for pdeentry in get_recursively(self.simdata["pdes"], "theoryname"):
+            for pdeentry in string_handling.get_recursively(self.simdata["pdes"], "theoryname"):
                 self.include_in(subdict["theoryname"], pdeentry)
             self.include_in(subdict["theoryname"], self.simdata["bcs"]["theoryname"])
             self.new_view(subdict)
@@ -763,7 +767,7 @@ class PDE_States:
                 subdict["ops"][-1]["props"] = []
 
     def props_handle_input(self, userstring):
-        if means_no(userstring):
+        if string_handling.means_no(userstring):
             self.trigger("props_parsed")
             return
 
@@ -775,7 +779,7 @@ class PDE_States:
 
             if "linear" in parsestring:
                 self.add_list_of_declarations(subdict["theoryname"], [
-                    add_ods("user_linear : ⊦ " + parsestring + ' mylhs = sketch "user knowledge" ')
+                    string_handling.add_ods("user_linear : ⊦ " + parsestring + ' mylhs = sketch "user knowledge" ')
                 ])
                 if "¬" in parsestring:
                     subdict["ops"][-1]["linear"] = False
@@ -789,7 +793,7 @@ class PDE_States:
             for property in ["elliptic"]:  # TODO more properties
                 if property in parsestring:
                     self.add_list_of_declarations(subdict["theoryname"], [
-                        add_ods("user_" + property + " : ⊦ " + parsestring + ' mylhs = sketch "user knowledge" ')
+                        string_handling.add_ods("user_" + property + " : ⊦ " + parsestring + ' mylhs = sketch "user knowledge" ')
                     ])
                     subdict["ops"][-1]["props"].append(parsestring)
                     if "¬" not in parsestring:
@@ -827,7 +831,6 @@ class PDE_States:
         # output
         self.display_result_as_bokeh()
 
-
     # cf. nbviewer.jupyter.org/github/bokeh/bokeh-notebooks/blob/master/tutorial/01 - Basic Plotting.ipynb
     def display_result_as_bokeh(self):
 
@@ -858,43 +861,43 @@ class PDE_States:
     def generate_mpd_theories(self):
         with CriticalSubdict({}, self.poutput):
             # generate Laws that define the parameters, if applicable
-            for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+            for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                 mpd_theory_name = "MPD_" + paramentry
                 self.mmtinterface.mmt_new_theory(mpd_theory_name)
                 self.include_in(mpd_theory_name, paramentry)
                 if self.mmtinterface.query_for(paramentry).hasDefinition(paramentry):
                     self.add_list_of_declarations(mpd_theory_name, [
                         "proof_" + paramentry + " : ⊦ " + self.simdata["parameters"][paramentry]["parsestring"].replace("=", "≐")
-                        + object_delimiter + " role Law"
+                        + string_handling.object_delimiter + " role Law"
                     ])
 
             # generate the Quantity of a hypothetical solution to an unknown
-            for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+            for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                 mpd_theory_name = "MPD_" + unknownentry
                 self.mmtinterface.mmt_new_theory(mpd_theory_name)
                 self.include_in(mpd_theory_name, unknownentry)
                 self.add_list_of_declarations(mpd_theory_name, [
                     unknownentry + " : " + self.simdata["unknowns"][unknownentry]["type"]
-                    + object_delimiter + " role Quantity"
+                    + string_handling.object_delimiter + " role Quantity"
                 ])
 
             # generate the Laws that define it, namely boundary conditions and PDEs #TODO BCs
-            for pdeentry in get_recursively(self.simdata["pdes"], "theoryname"):
+            for pdeentry in string_handling.get_recursively(self.simdata["pdes"], "theoryname"):
                 mpd_theory_name = "MPD_" + pdeentry
                 self.mmtinterface.mmt_new_theory(mpd_theory_name)
                 self.include_in(mpd_theory_name, pdeentry)
 
                 #include all the mpd_unknowns, parameters and bcs #TODO
-                for unknownentry in get_recursively(self.simdata["unknowns"], "theoryname"):
+                for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                     self.include_in(mpd_theory_name, "MPD_" + unknownentry)
 
-                for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+                for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                     self.include_in(mpd_theory_name, paramentry)
 
                 self.add_list_of_declarations(mpd_theory_name, [
                     "proof_" + pdeentry + " : ⊦ " + self.simdata["pdes"]["pdes"][pdeentry]["lhsstring"] +
                     " ≐ " + self.simdata["pdes"]["pdes"][pdeentry]["rhsstring"]
-                    + object_delimiter + " role Law"
+                    + string_handling.object_delimiter + " role Law"
                 ])
 
             # make an actual model theory that includes all of the Laws declared so far,
@@ -902,9 +905,9 @@ class PDE_States:
             modelname = "Model"
             self.mmtinterface.mmt_new_theory(modelname)
             # include all the mpd_parameters, mpd_pdes and mpd_bcs #TODO
-            for paramentry in get_recursively(self.simdata["parameters"], "theoryname"):
+            for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                 self.include_in(modelname, "MPD_" + paramentry)
-            for pdeentry in get_recursively(self.simdata["pdes"], "theoryname"):
+            for pdeentry in string_handling.get_recursively(self.simdata["pdes"], "theoryname"):
                 self.include_in(modelname, "MPD_" + pdeentry)
 
             return modelname
@@ -915,7 +918,7 @@ class PDE_States:
 
     # mmt input helper functions
     def include_in(self, in_which_theory, what):
-        return self.mmtinterface.mmt_new_decl("inc", in_which_theory, "include " + assert_question_mark(what))
+        return self.mmtinterface.mmt_new_decl("inc", in_which_theory, "include " + string_handling.assert_question_mark(what))
 
     def add_list_of_declarations(self, in_which_theory, declaration_list):
         for declaration in declaration_list:
@@ -942,11 +945,11 @@ class PDE_States:
 
     def include_former_views(self, current_view_name):
         """recursively look for all views already done and try to include them into the current view."""
-        for viewstring in get_recursively(self.simdata, "viewname"):
+        for viewstring in string_handling.get_recursively(self.simdata, "viewname"):
             if (current_view_name != viewstring):
                 try:
                     self.include_in(current_view_name,
-                                    "?" + re.split('AS', viewstring)[-1] + " = " + "?" + viewstring)
+                                    "?" + string_handling.split_string_at_AS(viewstring)[-1] + " = " + "?" + viewstring)
                 except MMTServerError as error:
                     # self.poutput("no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" + "?" + re.split('AS', dictentry["viewname"])[-1] + "?")
                     # we are expecting errors if we try to include something that is not referenced in the source theory, so ignore them
@@ -961,7 +964,7 @@ class PDE_States:
         return dictentry["theoryname"] + "AS" + (self.viewfrom[state])
 
     def include_trivial_assignment(self, in_view, theoryname):
-        self.include_in(in_view, assert_question_mark(theoryname) + " = " + assert_question_mark(theoryname))
+        self.include_in(in_view, string_handling.assert_question_mark(theoryname) + " = " + string_handling.assert_question_mark(theoryname))
 
     def get_inferred_type(self, in_theory, term):
         return self.mmtinterface.mmt_infer_type(in_theory, term).inferred_type_to_string()
