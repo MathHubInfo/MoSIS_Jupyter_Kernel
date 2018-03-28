@@ -7,13 +7,10 @@ from interview_kernel import Interview
 
 from jupyter_client.kernelspec import KernelSpecManager
 from IPython.utils.tempdir import TemporaryDirectory
+from shutil import copyfile
 
 kernel_json = Interview.kernel_json
-#{
-#    "argv": [sys.executable, "-m", "interview_kernel", "-f", "{connection_file}"],
-#    "display_name": "Interview",
-#    "language": "text",
-#}
+
 
 def install_my_kernel_spec(user=True, prefix=None):
     with TemporaryDirectory() as td:
@@ -21,9 +18,35 @@ def install_my_kernel_spec(user=True, prefix=None):
         with open(os.path.join(td, 'kernel.json'), 'w') as f:
             json.dump(kernel_json, f, sort_keys=True)
         # TODO: Copy any resources
+        try:
+            # copyfile('./kernel.js', os.path.join(td, 'kernel.js'))
+            interview = Interview()
+            with open(os.path.join(td, 'kernel.js'), 'w') as f:
+                # javascript code that sets an initial markdown cell
+                js = """define(['base/js/namespace'], function(Jupyter)
+                        {{
+                            function onload()
+                            {{
+                                if (Jupyter.notebook.get_cells().length ===1)
+                                {{
+                                    Jupyter.notebook.insert_cell_above('markdown').set_text(`{}`);
+                                }}
+                                console.log("interview kernel.js loaded")
+                            }}
+                            return {{
+                                onload: onload
+                            }};
+                        }});""".format(interview.my_markdown_greeting.replace("`", "\\`"))
 
-        print('Installing Jupyter kernel spec')
-        KernelSpecManager().install_kernel_spec(td, 'Interview', user=user, replace=True, prefix=prefix)
+                f.write(js)
+                print(js)
+
+        except Exception:
+            print('could not copy kernel.js, will not see initial message in notebook')
+            raise
+
+        print("Installing Jupyter kernel spec")
+        KernelSpecManager().install_kernel_spec(td, 'Interview', user=user, prefix=prefix)
 
 def _is_root():
     try:

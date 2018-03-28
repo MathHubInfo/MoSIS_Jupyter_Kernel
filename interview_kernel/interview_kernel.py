@@ -15,13 +15,14 @@ from bokeh.io import output_notebook
 
 from pde_state_machine import *
 from string_handling import build_url, get_recursively
+from distutils.util import strtobool
 
 
 """This is a Jupyter kernel derived from MetaKernel. To use it, install it with the install.py script and run 
 "jupyter notebook --debug --NotebookApp.token='' " from terminal. """
 class Interview(MetaKernel):
     implementation = 'Interview'
-    implementation_version = '1.0'
+    implementation_version = '0.1'
     language = 'text'
     language_version = '0.1'
     language_info = {
@@ -30,11 +31,6 @@ class Interview(MetaKernel):
         'file_extension': '.txt',
         'help_links': MetaKernel.help_links,
     }
-    banner = "Interview kernel\n\n" \
-             "Hello, " + getpass.getuser() + "! I am " + "TheInterview" + \
-             ", your partial differential equations and simulations expert. " \
-             "Let's set up a simulation together.\n" \
-             "Please enter anything to start the interview."
 
     kernel_json = {
         "argv": [
@@ -44,15 +40,26 @@ class Interview(MetaKernel):
         "name": "interview_kernel"
     }
 
+    banner = \
+"""**Hello, """ + getpass.getuser() + """! I am TheInterview, your partial differential equations and simulations expert.**
+Let's set up a model and simulation together.
+
+To get explanations, enter `explain <optional keyword>`. 
+To see a recap of what we know so far, enter `recap <optional keyword>`. 
+To interactively visualize ther current theory graph, enter `tgwiev` or `tgview mpd`. 
+Otherwise, you can always answer with \LaTeX-type input.
+
+You can inspect the currently loaded MMT theories under http://localhost:43397
+
+
+"""
+
     def __init__(self, **kwargs):
 
         self.state_machine = PDE_States(self.poutput, self.update_prompt, self.please_prompt, self.display_html)
 
         # call superclass constructor
         super(Interview, self).__init__(**kwargs)
-
-        self.do_execute("%matplotlib nbagg")
-        #plt.ion()
 
         # To make custom magics happen, cf. https://github.com/Calysto/metakernel
         # from IPython import get_ipython
@@ -62,7 +69,11 @@ class Interview(MetaKernel):
         self.update_prompt()
         self.poutstring = ""# to collect string output to send
         self.outstream_name = 'stdout'
-        self.richcontent = None  # to collect rich contents (images etc)
+
+        # already send some input to state machine, to capture initial output and have it displayed via kernel.js
+        self.state_machine.handle_state_dependent_input("anything")   # TODO compatibility with not-notebook?
+        self.my_markdown_greeting = Interview.banner + self.poutstring
+        self.poutstring = ""
 
         # bokeh notebook setup
         output_notebook()
@@ -75,7 +86,7 @@ class Interview(MetaKernel):
     ############# input processing if not explain or undo
     # def do_execute(self, code, silent=False, store_history=True, user_expressions=None,
     #                allow_stdin=False):
-    def do_execute_direct(self, code, silent=False):
+    def do_execute_direct(self, code, silent=False, allow_stdin=True):
         """This is where the user input enters our code"""
 
         arg = LatexNodes2Text().latex_to_text(code)
@@ -85,14 +96,24 @@ class Interview(MetaKernel):
                 self.state_machine.handle_state_dependent_input(arg)
 
         if not silent:
-            stream_content = {'name': self.outstream_name, 'text': self.poutstring}
-            self.send_response(self.iopub_socket, 'stream', stream_content)
-
-        if self.richcontent is not None:
-            # We send the display_data message with the contents.
-            self.send_response(self.iopub_socket, 'display_data', self.richcontent)
-
-            self.richcontent = None
+            #if self.outstream_name == "stderr": #TODO make errors markdown but red
+            #    # string output
+            #    stream_content = {'name': self.outstream_name, 'text': self.poutstring}
+            #    self.send_response(self.iopub_socket, 'stream', stream_content)
+            #    data_content = {
+            #                        "ename": "InterviewError",
+            #                        "evalue": self.poutstring,
+            #                        "traceback": [self.poutstring],
+            #                    }
+            #    self.send_response(self.iopub_socket, 'error', data_content)
+            #else:
+            # for other mime types, cf http://ipython.org/ipython-doc/stable/notebook/nbformat.html
+            data_content = {"data": {
+                                        "text/markdown": self.poutstring,
+                                    },
+                            "metadata": {}
+                            }
+            self.send_response(self.iopub_socket, 'display_data', data_content)
 
         self.poutstring = ""
         self.outstream_name = 'stdout'
@@ -107,7 +128,7 @@ class Interview(MetaKernel):
         self.state_machine.pass_other = pass_other
         self.display_widget()
 
-    def prompt_input_handling(self, arg):
+    def prompt_input_handling(self, arg):  # TODO make this widget-ed
         """ If we asked for a yes-no answer, execute what was specified in please_prompt.
         return true if the input was handled here, and false if not."""
         if self.state_machine.prompted:
