@@ -49,10 +49,9 @@ To see a recap of what we know so far, enter `recap <optional keyword>`.
 To interactively visualize ther current theory graph, enter `tgwiev` or `tgview mpd`. 
 Otherwise, you can always answer with \LaTeX-type input.
 
-You can inspect the currently loaded MMT theories under http://localhost:43397
-
 
 """
+    #You can inspect the currently loaded MMT theories under http://localhost:43397  #TODO
 
     def __init__(self, **kwargs):
 
@@ -264,6 +263,10 @@ You can inspect the currently loaded MMT theories under http://localhost:43397
         if args == '':
             url_args_dict = dict(type="pgraph",
                                  graphdata=self.state_machine.mmtinterface.namespace)
+            # if applicable, highlight the ephemeral parts https://github.com/UniFormal/TGView/issues/25
+            thynames = get_recursively(self.state_machine.simdata, "theoryname")
+            # if thynames:
+            #    url_args_dict["highlight"] = ",".join(thynames)
         else:
             model_name = self.state_machine.generate_mpd_theories()
             if model_name is None:  # Fallback for now, because ephemeral theories are not yet accessible to tgview
@@ -271,15 +274,11 @@ You can inspect the currently loaded MMT theories under http://localhost:43397
             url_args_dict = dict(type="mpd",
                                  graphdata=self.state_machine.mmtinterface.namespace + "?" + model_name)
 
+        # have the side bars go away
         url_args_dict["viewOnlyMode"] = "true"
 
-        # if applicable, highlight the ephemeral parts https://github.com/UniFormal/TGView/issues/25
-        thynames = get_recursively(self.state_machine.simdata, "theoryname")
-        #if thynames:
-        #    url_args_dict["highlight"] = ",".join(thynames)
-
         tgview_url = build_url(server_url, "graphs/tgview.html", args_dict=url_args_dict)
-        print(tgview_url)
+        #print(tgview_url)
 
         code = """
             <iframe 
