@@ -5,6 +5,8 @@ import re
 from urllib.parse import urlparse, urlencode, ParseResult
 
 object_delimiter = "❘"
+declaration_delimiter = "❙"
+module_delimiter = "❚"
 
 def means_no(answer):
     try:
@@ -61,7 +63,7 @@ def insert_type(string, whichtype):
 
 
 def type_is_function_from(type_string, from_string):
-    if type_string.startswith(from_string + " →"):
+    if type_string.startswith(from_string + " ⟶"):
         return True
     if type_string.startswith("{ : " + from_string):
         return True
@@ -80,7 +82,7 @@ def type_is_function_from(type_string, from_string):
 
 
 def type_is_function_to(type_string, to_string):
-    if type_string.endswith("→ " + to_string):
+    if type_string.endswith("⟶ " + to_string):
         return True
     if type_string.endswith("} " + to_string):
         return True
@@ -115,7 +117,7 @@ def get_first_word(string):
 def get_last_type(string):
     string = remove_round_brackets(string)
     string = string.rstrip()
-    return re.split('[→ \s]', string)[-1]
+    return re.split('[⟶ \s]', string)[-1]
 
 
 def make_reverse_list_of_type_symbols(string):
@@ -140,7 +142,7 @@ def remove_curly_brackets(string):
 
 
 def remove_arrows(string):
-    return string.replace("→", "")
+    return string.replace("⟶", "")
 
 
 def remove_colons(string):

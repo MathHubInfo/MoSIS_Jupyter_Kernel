@@ -164,7 +164,7 @@ class MMTReply:
             name = next.get('name')
             while next.getnext() is not None:
                 next = next.getnext()
-                name = name + " → " + next.get('name')
+                name = name + " ⟶ " + next.get('name')
         return name
 
     # (probably very volatile) accesses to concrete data structures
@@ -304,4 +304,6 @@ class MMTInterface:
 
 
 def add_dd(string):
+    if string.endswith("❙") or string.endswith("❚"):
+        return string
     return string + "❙"
