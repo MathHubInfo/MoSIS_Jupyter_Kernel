@@ -95,24 +95,24 @@ Otherwise, you can always answer with \LaTeX-type input.
                 self.state_machine.handle_state_dependent_input(arg)
 
         if not silent:
-            #if self.outstream_name == "stderr": #TODO make errors markdown but red
-            #    # string output
-            #    stream_content = {'name': self.outstream_name, 'text': self.poutstring}
-            #    self.send_response(self.iopub_socket, 'stream', stream_content)
+            if self.outstream_name == "stderr": #TODO make errors markdown but red
+                # string output
+                stream_content = {'name': self.outstream_name, 'text': self.poutstring}
+                self.send_response(self.iopub_socket, 'stream', stream_content)
             #    data_content = {
             #                        "ename": "InterviewError",
             #                        "evalue": self.poutstring,
             #                        "traceback": [self.poutstring],
             #                    }
             #    self.send_response(self.iopub_socket, 'error', data_content)
-            #else:
-            # for other mime types, cf http://ipython.org/ipython-doc/stable/notebook/nbformat.html
-            data_content = {"data": {
-                                        "text/markdown": self.poutstring,
-                                    },
-                            "metadata": {}
-                            }
-            self.send_response(self.iopub_socket, 'display_data', data_content)
+            else:
+                # for other mime types, cf. http://ipython.org/ipython-doc/stable/notebook/nbformat.html
+                data_content = {"data": {
+                                            "text/markdown": self.poutstring,
+                                        },
+                                "metadata": {}
+                                }
+                self.send_response(self.iopub_socket, 'display_data', data_content)
 
         self.poutstring = ""
         self.outstream_name = 'stdout'
