@@ -30,6 +30,7 @@ def install_my_kernel_spec(user=True, prefix=None):
                                 if (Jupyter.notebook.get_cells().length ===1)
                                 {{
                                     Jupyter.notebook.insert_cell_above('markdown').set_text(`{}`);
+                                    Jupyter.notebook.get_cell(0).render();
                                 }}
                                 console.log("interview kernel.js loaded")
                             }}
