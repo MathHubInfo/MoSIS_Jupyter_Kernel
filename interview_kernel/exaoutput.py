@@ -7,13 +7,10 @@ from pylatexenc.latexencode import utf8tolatex, utf82latex
 
 
 def remove_ensuremaths():
-    """remove ensuremath wrappers when translating back from unicode to latex"""
-    thisdict = utf82latex
+    """remove ensuremath wrappers in utf82latex before translating back from unicode to latex"""
     for key, value in utf82latex.items():
         if value.startswith('\\ensuremath{'):
             utf82latex[key] = value.replace('\\ensuremath{', '', 1)[:-1]
-
-    # from here on we are concerned with the creation of output
 
 
 class ExaOutput:
@@ -129,7 +126,7 @@ class ExaOutput:
                 "ApplicationHints { // alt L4Hint(s) \n"
                 "  // parameters \n"
                 "  l4_genDefaultApplication = true \n"
-                "  l4_defAppl_FieldToPrint = \"" + unknowns[0] + "\" \n" #TODO
+                "  l4_defAppl_FieldToPrint = \"" + first_unknown + "\" \n" #TODO
                 "} \n"
            )
 

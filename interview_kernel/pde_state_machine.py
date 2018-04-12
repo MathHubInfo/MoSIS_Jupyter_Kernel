@@ -178,106 +178,6 @@ class PDE_States:
             },
         }
 
-        axes = OrderedDict([
-            ("x_1", "[0;1]"),
-        ])
-        self.examplesimdata = {
-            "num_dimensions": 1,
-            "domain": {
-                "name": "Ω",
-                "theoryname": "Omega",
-                "axes": axes,  # names and intervals
-                "from": 0.0,
-                "to": 1.0,
-            },
-            "unknowns": {  # names and theorynames #TODO OrderedDict
-                "u": {
-                    "theoryname": "u",
-                    "string": "u : Ω ⟶ ℝ",
-                },
-            },
-            "parameters": {  # names and theorynames
-                "μ": {
-                    "theoryname": "mu",
-                    "string": "μ : ℝ = 1",
-                },
-                "f": {
-                    "theoryname": "f",
-                    "string": "f : Ω ⟶ ℝ = [x] x ⋅ x",
-                },
-            },
-            "pdes": {
-                "pdes": [
-                    {
-                        "theoryname": "pde1",
-                        "string": "μ ∆u = f(x)",  # TODO use function arithmetic
-                        'lhsstring': 'μ Δu ',
-                        'rhsstring': 'f(x)',
-                        'op': 'Δ',
-                        'lhsparsestring': ' [ anyu : Ω ⟶ ℝ ] Δ anyu ',
-                        'rhsparsestring': ' [ x : Ω ]  f(x)',
-                        # this is more of a wish list... cf https://github.com/UniFormal/MMT/issues/295
-                        "expanded": "μ d²/dx_1² u = f(x_1)",
-                        "order_in_unknown": {
-                            "u": 2,
-                        },
-                    },
-                ],
-            },
-            "bcs": {
-                "theoryname": "ephbcs",
-                "bcs": [
-                    {
-                        "name": "bc1",
-                        "type": "Dirichlet",
-                        "string": "u (0) = x_1**2",
-                        "on": "0",
-                    },
-                    {
-                        "name": "bc2",
-                        "type": "Dirichlet",
-                        "string": "u (1) = x_1**2",
-                        "on": "1",
-                    },
-                ],
-            },
-            "props": {
-                "theoryname": "ephboundaryvalueproblem",
-                "ops": [
-                    {
-                        "name": "op1",
-                        "linear": True,  # or false or unknown
-                        "props": ["elliptic"]
-                    }
-                ]
-            },
-            "sim": {
-                "type": "FD",
-            },
-        }
-
-        self.testsimdata = {
-            'num_dimensions': 1,
-            'domain': {'name': 'Ω', 'theoryname': 'ephdomain', 'axes': OrderedDict([('x_1', '[0.0;1.0]')]),
-                       'from': 0.0, 'to': 1.0, 'boundary_name': 'Ω', 'viewname': 'ephdomainASmDomain'},
-            'unknowns': OrderedDict([('u', {'theoryname': 'u', 'string': 'u : Ω ⟶ ℝ', 'type': 'Ω ⟶ ℝ', 'codomain': 'ℝ',
-                                            'viewname': 'uASmUnknown'})]),
-            'parameters': {
-                'f': {'theoryname': 'f', 'string': 'f = x', 'parsestring': 'f = [ x : Ω] x', 'type': '{ : Ω } Ω',
-                      'viewname': 'fASmParameter'}},
-            'pdes': {'pdes': [
-                {'theoryname': 'ephpde1', 'string': 'Δu = 0.0', 'lhsstring': 'Δu', 'rhsstring': '0.0',
-                 'viewname': 'ephpde1ASmPDE', 'op': 'Δ', 'lhsparsestring': ' [ anyu : Ω ⟶ ℝ ] Δ anyu ',
-                 'rhsparsestring': ' [ x : Ω ]  0.0'}]},
-            'bcs': {'theoryname': 'ephbcs', 'bcs': [
-                {'name': 'bc0', 'string': 'u = f', 'lhsstring': 'u ', 'rhsstring': ' f', 'type': ('Dirichlet',),
-                 'on': ('x',), 'measure': (2,)}], 'bctypes': {'theoryname': 'uBCTypes'},
-                    'viewname': 'ephbcsASmBCsRequired',
-                    'measure_given': 2},
-            'props': {},
-            'sim': {},
-        }
-
         self.exaout = None
 
         self.mmtinterface = MMTInterface()
@@ -318,6 +218,7 @@ class PDE_States:
 
     ##### for state dimensions
     def dimensions_begin(self):
+        self.print_subheading("Modeling")
         self.poutput("How many dimensions does your model have?")
         self.print_empty_line()
         self.poutput("I am just assuming it's 1, since that is all we can currently handle.")  # TODO
@@ -426,6 +327,7 @@ class PDE_States:
                                                   parsestring)
 
             type = self.get_inferred_type(unknown_name + "_to_go_to_trash", unknown_name)
+            #type = self.get_inferred_type(parsestring, unknown_name) #TODO in a smarter way
             usubdict[unknown_name] = {
                 "theoryname": unknown_name,
                 "string": parsestring,
@@ -528,7 +430,7 @@ class PDE_States:
         with CriticalSubdict(self.simdata["pdes"]["pdes"], self.poutput) as psubdict:
             psubdict.append({})
             with CriticalSubdict(self.simdata["pdes"]["pdes"][-1], self.poutput, False) as subdict:
-                subdict["theoryname"] = "ephpde" + str(len(self.simdata["pdes"]["pdes"]))
+                subdict["theoryname"] = "ephemeral_pde" + str(len(self.simdata["pdes"]["pdes"]))
                 # create new theory including all unknowns and parameters
                 self.new_theory(subdict["theoryname"])
                 for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
@@ -669,10 +571,21 @@ class PDE_States:
                             and not string_handling.type_is_function_from(rhstype,
                                                                           self.simdata["domain"]["boundary_name"]):
                         parts[1] = " [ x : " + domain_boundary_name + " ] " + parts[1]
-                    self.add_list_of_declarations(subdict["viewname"], [
-                        "firstBC = " + bc_type_struct_name + "/DirichletBCfun " + parts[1],
-                        "secondBC = " + bc_type_struct_name + "/DirichletBCfun " + parts[1],
-                    ])
+                    #self.add_list_of_declarations(subdict["viewname"], [
+                    #    "firstBC = " + bc_type_struct_name + "/DirichletBCfun " + parts[1], #TODO
+                    #    "secondBC = " + bc_type_struct_name + "/DirichletBCfun " + parts[1],
+                    #])
+                    try:
+                        self.mmtinterface.mmt_new_decl("first", subdict["viewname"], "firstBC = " + bc_type_struct_name +
+                                                                        "/DirichletBCfun " + parts[1])
+                    except MMTServerError as error:#TODO!!
+                        pass
+                    try:
+                        self.mmtinterface.mmt_new_decl("second", subdict["viewname"], "secondBC = " + bc_type_struct_name +
+                                                                        "/DirichletBCfun " + parts[1])
+                    except MMTServerError as error:#TODO!!
+                        pass
+
                     subdict["bcs"][-1]["type"] = "Dirichlet",
                     subdict["bcs"][-1]["on"] = "x",
                     subdict["bcs"][-1]["measure"] = 2,
@@ -827,6 +740,7 @@ class PDE_States:
     ##### for state sim
     def sim_begin(self):
         self.recap()
+        self.print_subheading("Solving")
         self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils? "
                            "If yes, you can provide a configuration name, or we'll just use your name.",
                            if_yes=self.sim_ok_fd, if_no=None, pass_other=True)
@@ -878,6 +792,16 @@ class PDE_States:
 
     def generate_mpd_theories(self):
         with CriticalSubdict({}, self.poutput):
+            # generate the Quantity of a hypothetical solution to an unknown
+            for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
+                mpd_theory_name = "MPD_" + unknownentry
+                self.mmtinterface.mmt_new_theory(mpd_theory_name)
+                self.include_in(mpd_theory_name, unknownentry)
+                self.add_list_of_declarations(mpd_theory_name, [
+                    unknownentry + " : " + self.simdata["unknowns"][unknownentry]["type"]
+                    + string_handling.object_delimiter + " role Quantity"
+                ])
+
             # generate Laws that define the parameters, if applicable
             for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                 mpd_theory_name = "MPD_" + paramentry
@@ -889,44 +813,52 @@ class PDE_States:
                         + string_handling.object_delimiter + " role Law"
                     ])
 
-            # generate the Quantity of a hypothetical solution to an unknown
-            for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
-                mpd_theory_name = "MPD_" + unknownentry
-                self.mmtinterface.mmt_new_theory(mpd_theory_name)
-                self.include_in(mpd_theory_name, unknownentry)
-                self.add_list_of_declarations(mpd_theory_name, [
-                    unknownentry + " : " + self.simdata["unknowns"][unknownentry]["type"]
-                    + string_handling.object_delimiter + " role Quantity"
-                ])
-
             # generate the Laws that define it, namely boundary conditions and PDEs #TODO BCs
-            for pdeentry in string_handling.get_recursively(self.simdata["pdes"], "theoryname"):
-                mpd_theory_name = "MPD_" + pdeentry
+            pde_names = string_handling.get_recursively(self.simdata["pdes"], "theoryname")
+            for pde_number in range(len(pde_names)):
+                mpd_theory_name = "MPD_pde" + str(pde_number)
+                pde = self.simdata["pdes"]["pdes"][pde_number]
                 self.mmtinterface.mmt_new_theory(mpd_theory_name)
-                self.include_in(mpd_theory_name, pdeentry)
+                self.include_in(mpd_theory_name, pde_names[pde_number])
 
                 #include all the mpd_unknowns, parameters and bcs #TODO
                 for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                     self.include_in(mpd_theory_name, "MPD_" + unknownentry)
 
                 for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
-                    self.include_in(mpd_theory_name, paramentry)
+                    if paramentry in pde['string']:
+                        self.include_in(mpd_theory_name, paramentry)
 
                 self.add_list_of_declarations(mpd_theory_name, [
-                    "proof_" + pdeentry + " : ⊦ " + self.simdata["pdes"]["pdes"][pdeentry]["lhsstring"] +
-                    " ≐ " + self.simdata["pdes"]["pdes"][pdeentry]["rhsstring"]
-                    + string_handling.object_delimiter + " role Law"
+                    str("proof_" + str(pde_number) + " : ⊦ " + pde["lhsstring"] + " ≐ " + pde["rhsstring"] +
+                    string_handling.object_delimiter + " role Law")
+                ])
+
+            mpd_theory_name = "MPD_bcs"
+            self.mmtinterface.mmt_new_theory(mpd_theory_name)
+            for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
+                self.include_in(mpd_theory_name, "MPD_" + unknownentry)
+            self.include_in(mpd_theory_name, self.simdata["bcs"]["theoryname"])
+
+            for bc in self.simdata["bcs"]["bcs"]:
+                for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
+                    if paramentry in bc['string']:
+                        self.include_in(mpd_theory_name, paramentry)
+                self.add_list_of_declarations(mpd_theory_name, [
+                    str("proof_" + bc['name'] + " : ⊦ " + bc['lhsstring'] + " ≐ " + bc["rhsstring"] +
+                        string_handling.object_delimiter + " role BoundaryCondition")
                 ])
 
             # make an actual model theory that includes all of the Laws declared so far,
             # which in turn include the Quantities
-            modelname = "Model"
+            modelname = "MPD_Model"
             self.mmtinterface.mmt_new_theory(modelname)
             # include all the mpd_parameters, mpd_pdes and mpd_bcs #TODO
             for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                 self.include_in(modelname, "MPD_" + paramentry)
-            for pdeentry in string_handling.get_recursively(self.simdata["pdes"], "theoryname"):
-                self.include_in(modelname, "MPD_" + pdeentry)
+            for pde_number in range(len(pde_names)):
+                self.include_in(modelname, "MPD_pde" + str(pde_number))
+            self.include_in(modelname, "MPD_bcs")
 
             return modelname
 
@@ -1002,6 +934,10 @@ class PDE_States:
     def print_empty_line(self):
         self.poutput("\n\n")  # double to actually make it a Markdown newline
 
+    def print_subheading(self, heading):
+        self.poutput("## " + heading)
+        self.print_empty_line()
+
     def explain(self, userstring=None):  # TODO
         with CriticalSubdict({}, self.poutput):
             reply = self.mmtinterface.query_for(
@@ -1020,5 +956,7 @@ class PDE_States:
                 self.print_empty_line()
                 self.poutput(state_name + ": " + str(self.simdata[state_name]))
             if state_name == self.state:
+                self.print_empty_line()
                 return
+
 
