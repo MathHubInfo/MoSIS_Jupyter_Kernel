@@ -791,7 +791,7 @@ class PDE_States:
         # self.Display(Javascript(script + div))  # show the results
 
     def generate_mpd_theories(self):
-        with CriticalSubdict({}, self.poutput):
+        with CriticalSubdict(self.simdata[self.state], self.poutput):
             # generate the Quantity of a hypothetical solution to an unknown
             for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                 mpd_theory_name = "MPD_" + unknownentry
@@ -813,7 +813,7 @@ class PDE_States:
                         + string_handling.object_delimiter + " role Law"
                     ])
 
-            # generate the Laws that define it, namely boundary conditions and PDEs #TODO BCs
+            # generate the Laws that define it, namely boundary conditions and PDEs
             pde_names = string_handling.get_recursively(self.simdata["pdes"], "theoryname")
             for pde_number in range(len(pde_names)):
                 mpd_theory_name = "MPD_pde" + str(pde_number)
@@ -821,7 +821,7 @@ class PDE_States:
                 self.mmtinterface.mmt_new_theory(mpd_theory_name)
                 self.include_in(mpd_theory_name, pde_names[pde_number])
 
-                #include all the mpd_unknowns, parameters and bcs #TODO
+                # include all the mpd_unknowns, parameters and bcs
                 for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
                     self.include_in(mpd_theory_name, "MPD_" + unknownentry)
 
@@ -834,6 +834,7 @@ class PDE_States:
                     string_handling.object_delimiter + " role Law")
                 ])
 
+        with CriticalSubdict(self.simdata[self.state], self.poutput):
             mpd_theory_name = "MPD_bcs"
             self.mmtinterface.mmt_new_theory(mpd_theory_name)
             for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
@@ -849,11 +850,11 @@ class PDE_States:
                         string_handling.object_delimiter + " role BoundaryCondition")
                 ])
 
+        with CriticalSubdict(self.simdata[self.state], self.poutput):
             # make an actual model theory that includes all of the Laws declared so far,
             # which in turn include the Quantities
             modelname = "MPD_Model"
             self.mmtinterface.mmt_new_theory(modelname)
-            # include all the mpd_parameters, mpd_pdes and mpd_bcs #TODO
             for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                 self.include_in(modelname, "MPD_" + paramentry)
             for pde_number in range(len(pde_names)):

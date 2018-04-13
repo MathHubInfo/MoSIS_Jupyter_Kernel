@@ -1,13 +1,6 @@
 # to run mmt server : cf. https://docs.python.org/3/library/subprocess.html
 import subprocess
-import psutil
 import time
-# for now, running
-# java -jar /home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar --file=server-interview.msl --keepalive
-# or
-# mmt
-# extension info.kwarc.mmt.interviews.InterviewServer
-# server on 8080
 import threading
 # TODO ask dennis on whether and how to delete modules
 
@@ -32,7 +25,7 @@ def start_mmt_server(port_number, mmtjar):
 
 
 def exit_mmt_server(port_number, mmtjar, timeout=3.0):
-    """tries to shutdown the mmt server process"""
+    """tries to shut down the mmt server process"""
     completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
                                 "exit"],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -263,7 +256,7 @@ class MMTInterface:
         except ConnectionError as error:  # this seems to never be called
             print(error)
             print("Are you sure the mmt server is running?")
-            raise SystemExit
+            raise
         # print(req.text) if self.debugprint else 0
         if req.text.startswith('<'):
             root = etree.fromstring(req.text)

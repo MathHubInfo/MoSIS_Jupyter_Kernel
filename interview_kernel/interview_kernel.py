@@ -46,7 +46,7 @@ Let's set up a model and simulation together.
 
 To get explanations, enter `explain <optional keyword>`. 
 To see a recap of what we know so far, enter `recap <optional keyword>`. 
-To interactively visualize ther current theory graph, enter `tgwiev` or `tgview mpd`. 
+To interactively visualize the current theory graph, enter `tgwiev` or `tgview mpd`. 
 Otherwise, you can always answer with \LaTeX-type input.
 
 
