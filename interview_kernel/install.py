@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from interview_kernel import Interview
+from .interview_kernel import Interview
 
 from jupyter_client.kernelspec import KernelSpecManager
 from IPython.utils.tempdir import TemporaryDirectory

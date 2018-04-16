@@ -7,9 +7,9 @@ from collections import OrderedDict
 import getpass
 import re
 
-import string_handling
-from exaoutput import ExaOutput, ExaRunner
-from mmtinterface import *
+from . import string_handling
+from .exaoutput import ExaOutput, ExaRunner
+from .mmtinterface import *
 
 from bokeh.io import output_notebook, show, export_svgs
 from bokeh.plotting import figure

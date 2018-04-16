@@ -13,10 +13,10 @@ from pylatexenc.latex2text import LatexNodes2Text
 import getpass
 from bokeh.io import output_notebook
 
-#from . import pde_state_machine
-import pde_state_machine
-#from . import string_handling
-import string_handling
+from . import pde_state_machine
+#import pde_state_machine
+from . import string_handling
+#import string_handling
 from distutils.util import strtobool
 
 
