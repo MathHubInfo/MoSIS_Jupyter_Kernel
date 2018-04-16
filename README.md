@@ -4,7 +4,7 @@
 
 from this directory, run 
 ```shell
-pip install interview_kernel
+pip install .
 python setup.py install
 cd interview_kernel
 python install.py
