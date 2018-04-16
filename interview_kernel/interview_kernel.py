@@ -198,11 +198,6 @@ Otherwise, you can always answer with \LaTeX-type input.
     def update_prompt(self):
         self.prompt = "(" + self.state_machine.state + ")" #TODO
 
-    def do_shutdown(self, restart):
-        self.state_machine.mmtinterface.exit_mmt()
-
-        return super(Interview, self).do_shutdown(restart)
-
     # tab completion for empty lines
     def do_complete(self, code, cursor_pos):
         """Override of cmd2 method which completes command names both for command completion and help."""
@@ -254,11 +249,7 @@ Otherwise, you can always answer with \LaTeX-type input.
 
         args = args.replace("tgview", '', 1).strip()
 
-        server_url = str(self.state_machine.mmtinterface.serverInstance)
-
-        url_args_dict = {
-            "type": "pgraph",
-        }
+        server_url = str(self.state_machine.mmtinterface.mmt_base_url)
 
         if args == '':
             url_args_dict = dict(type="pgraph",

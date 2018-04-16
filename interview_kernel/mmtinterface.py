@@ -2,6 +2,7 @@
 import subprocess
 import time
 import threading
+import os
 # TODO ask dennis on whether and how to delete modules
 
 # to do http requests
@@ -14,76 +15,76 @@ from lxml import etree
 #from openmath import openmath
 
 
-def start_mmt_server(port_number, mmtjar):
-    """starts the mmt server as a separate subprocess"""
-    p = subprocess.run(["/usr/bin/java", "-jar", mmtjar, # "--file=server-interview.msl",
-                          "server", "on", str(port_number), "--keepalive"],
-                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    out = p.stdout
-    if p.returncode != 0 and p.returncode != 130:  # if not closed gracefully or through ctrl-c
-        raise MMTServerError("Server aborted, return code " + str(p.returncode) + ", " + str(out))
-
-
-def exit_mmt_server(port_number, mmtjar, timeout=3.0):
-    """tries to shut down the mmt server process"""
-    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
-                                "exit"],
-                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
-        if timeout > 0.0:
-            exit_mmt_server(port_number, mmtjar, timeout - 0.1)
-
-
-def start_mmt_extension(port_number, mmtjar, timeout=3.0):
-    """starts the interview extension for mmt"""
-    time.sleep(0.1)  # hope for server to have started communication already
-    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
-                  "extension", "info.kwarc.mmt.interviews.InterviewServer"],
-                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
-        if timeout > 0.0:
-            start_mmt_extension(port_number, mmtjar, timeout-0.1)
-        else:
-            raise MMTServerError("unable to start interview extension")
-
-
-def start_mmt_relational_reader(port_number, mmtjar, timeout=3.0):
-    """starts the relational reader mmt server extension, which is required for some tgview graph types
-            attention: this loads everything in the local mathhub folder, can take some time depending on your files"""
-    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
-                  "extension", "info.kwarc.mmt.api.ontology.RelationalReader"],
-                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
-        if timeout > 0.0:
-            start_mmt_extension(port_number, mmtjar, timeout-0.1)
-        else:
-            raise MMTServerError("unable to start interview extension")
-
-
-def find_free_port():
-    import socket
-    port_number = 0
-    while (port_number < 1024) or (8888 < port_number < 10000):
-        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s1:
-            s1.bind(('localhost', 0))            # Bind to a free port provided by the host.
-            port_number = s1.getsockname()[1]
-    return port_number  # Return the port number assigned.
-
-
-def run_mmt(mmtjar, port_number=None):
-    if port_number is None:
-        port_number = find_free_port()
-
-    t1 = threading.Thread(target=start_mmt_server, args=(port_number, mmtjar), daemon=True)
-    t1.start()
-
-    start_mmt_extension(port_number, mmtjar)
-    start_mmt_relational_reader(port_number, mmtjar)
-
-    #t2 = threading.Thread(target=start_mmt_extension, args=[port_number], daemon=True)
-    #t2.start()
-    return port_number
-
+#def start_mmt_server(port_number, mmtjar):
+#    """starts the mmt server as a separate subprocess"""
+#    p = subprocess.run(["/usr/bin/java", "-jar", mmtjar, # "--file=server-interview.msl",
+#                          "server", "on", str(port_number), "--keepalive"],
+#                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+#    out = p.stdout
+#    if p.returncode != 0 and p.returncode != 130:  # if not closed gracefully or through ctrl-c
+#        raise MMTServerError("Server aborted, return code " + str(p.returncode) + ", " + str(out))
+#
+#
+#def exit_mmt_server(port_number, mmtjar, timeout=3.0):
+#    """tries to shut down the mmt server process"""
+#    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
+#                                "exit"],
+#                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+#    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
+#        if timeout > 0.0:
+#            exit_mmt_server(port_number, mmtjar, timeout - 0.1)
+#
+#
+#def start_mmt_extension(port_number, mmtjar, timeout=3.0):
+#    """starts the interview extension for mmt"""
+#    time.sleep(0.1)  # hope for server to have started communication already
+#    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
+#                  "extension", "info.kwarc.mmt.interviews.InterviewServer"],
+#                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+#    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
+#        if timeout > 0.0:
+#            start_mmt_extension(port_number, mmtjar, timeout-0.1)
+#        else:
+#            raise MMTServerError("unable to start interview extension")
+#
+#
+#def start_mmt_relational_reader(port_number, mmtjar, timeout=3.0):
+#    """starts the relational reader mmt server extension, which is required for some tgview graph types
+#            attention: this loads everything in the local mathhub folder, can take some time depending on your files"""
+#    completed = subprocess.run(["/usr/bin/java", "-jar", mmtjar, ":send", str(port_number),
+#                  "extension", "info.kwarc.mmt.api.ontology.RelationalReader"],
+#                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+#    if completed.stdout != None and "(Connection refused)" in str(completed.stdout):
+#        if timeout > 0.0:
+#            start_mmt_extension(port_number, mmtjar, timeout-0.1)
+#        else:
+#            raise MMTServerError("unable to start interview extension")
+#
+#
+#def find_free_port():
+#    import socket
+#    port_number = 0
+#    while (port_number < 1024) or (8888 < port_number < 10000):
+#        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s1:
+#            s1.bind(('localhost', 0))            # Bind to a free port provided by the host.
+#            port_number = s1.getsockname()[1]
+#    return port_number  # Return the port number assigned.
+#
+#
+#def run_mmt(mmtjar, port_number=None):
+#    if port_number is None:
+#        port_number = find_free_port()
+#
+#    t1 = threading.Thread(target=start_mmt_server, args=(port_number, mmtjar), daemon=True)
+#    t1.start()
+#
+#    start_mmt_extension(port_number, mmtjar)
+#    start_mmt_relational_reader(port_number, mmtjar)
+#
+#    #t2 = threading.Thread(target=start_mmt_extension, args=[port_number], daemon=True)
+#    #t2.start()
+#    return port_number
+#
 
 class MMTServerError(Exception):
     def __init__(self, err, longerr=None):
@@ -187,70 +188,61 @@ def element_to_string(element):
 
 
 class MMTInterface:
-    def __init__(self, mmt_jar="/home/freifrau/Desktop/masterarbeit/mmt/deploy/mmt.jar"):
-        self.mmt_jar = mmt_jar
-        self.port_number = run_mmt(self.mmt_jar)  # , port_number)
+    def __init__(self):
+        # get current mmt url
+        self.mmt_base_url = os.environ.setdefault('MMT_BASE_URL', 'http://localhost:9000')
+
+        # set up session
+        self.session = requests.Session()
+        self.adapter = requests.adapters.HTTPAdapter()
+        self.session.mount('https://', self.adapter)
+        self.session.mount('http://', self.adapter)
+
         # set parameters for communication with mmt server
-        self.serverInstance = 'http://localhost:'+str(self.port_number)
-        self.extension = ':interview'
+        self.mmt_extension = ':interview'
         self.URIprefix = 'http://mathhub.info/'
         self.namespace = self.URIprefix + 'MitM/smglom/calculus/differentialequations'  # TODO
+
         self.debugprint = False
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.exit_mmt()
-
-    def __del__(self):
-        self.exit_mmt()
-
-    def exit_mmt(self):
-        exit_mmt_server(self.port_number, self.mmt_jar)
 
     def mmt_new_theory(self, thyname):
         # So, ich hab mal was zu MMT/devel gepusht. Es gibt jetzt eine Extension namens InterviewServer. Starten tut man die mit "extension info.kwarc.mmt.interviews.InterviewServer"
         # Wenn du dann in MMT den Server (sagen wir auf Port 8080) startest, kannst du folgende HTTP-Requests ausführen:
         # "http://localhost:8080/:interview/new?theory="<MMT URI>"" fügt eine neue theorie mit der uri <MMT URI> hinzu
-        req = '/' + self.extension + '/new?theory=' + quote(self.get_mpath(
+        req = '/' + self.mmt_extension + '/new?theory=' + quote(self.get_mpath(
             thyname)) + '&meta=' + quote('http://mathhub.info/MitM/Foundation?Logic')
         return self.http_request(req)
 
     def mmt_new_view(self, viewname, fromtheory, totheory):
         # analog für ?view="<MMT URI>".
-        req = '/' + self.extension + '/new?view=' + quote(self.get_mpath(viewname)) + '&from=' + quote(self.get_mpath(
+        req = '/' + self.mmt_extension + '/new?view=' + quote(self.get_mpath(viewname)) + '&from=' + quote(self.get_mpath(
             fromtheory)) + '&to=' + quote(self.get_mpath(totheory))
         return self.http_request(req)
 
     def mmt_new_decl(self, declname, thyname, declcontent):
         # ".../:interview/new?decl="<irgendwas>"&cont="<MMT URI>" ist der query-path um der theorie <MMT URI> eine neue declaration hinzuzufügen (includes, konstanten...). Die Declaration sollte dabei in MMT-syntax als text im Body des HTTP-requests stehen.
-        post = '/' + self.extension + '/new?decl=d&cont=' + quote(self.get_mpath(thyname))
+        post = '/' + self.mmt_extension + '/new?decl=d&cont=' + quote(self.get_mpath(thyname))
         return self.http_request(post, add_dd(declcontent))
 
     def mmt_new_term(self, termname, thyname, termcontent):
         # analog für ".../:interview/new?term="<irgendwas>"&cont="<MMT URI>" für terme - nachdem da nicht klar ist was der server damit tun sollte gibt er den geparsten term als omdoc-xml zurück (wenn alles funktioniert)
-        post = '/' + self.extension + '/new?term=' + quote(termname) + '&cont=' + quote(self.get_mpath(thyname))
+        post = '/' + self.mmt_extension + '/new?term=' + quote(termname) + '&cont=' + quote(self.get_mpath(thyname))
         return self.http_request(post, termcontent)
 
     def mmt_infer_type(self, thyname, termcontent):
-        post = '/' + self.extension + '/infer?cont=' + quote(self.get_mpath(thyname))
+        post = '/' + self.mmt_extension + '/infer?cont=' + quote(self.get_mpath(thyname))
         return self.http_request(post, termcontent)
 
     def http_request(self, message, data=None):
-        url = self.serverInstance + message
+        url = self.mmt_base_url + message
         print(url) if self.debugprint else 0
-        session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter()
-        session.mount('https://', adapter)
-        session.mount('http://', adapter)
         try:
             if data:
                 binary_data = data.encode('UTF-8')
                 print('\n' + str(data)) if self.debugprint else 0
                 headers = {'content-type': 'application/json',
                            'content-encoding': 'UTF-8'}
-                req = session.post(url, data=binary_data, headers=headers, stream=True)
+                req = self.session.post(url, data=binary_data, headers=headers, stream=True)
             else:
                 req = requests.get(url)
         except ConnectionError as error:  # this seems to never be called
@@ -280,16 +272,14 @@ class MMTInterface:
         return self.http_qrequest(querycontent)
 
     def http_qrequest(self, data, message='/:query'):
-        url = self.serverInstance + message
+        url = self.mmt_base_url + message
         print(url) if self.debugprint else 0
-        session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter()
-        session.mount('https://', adapter)
-        session.mount('http://', adapter)
+        self.session.mount('https://', self.adapter)
+        self.session.mount('http://', self.adapter)
         print('\n' + str(data)) if self.debugprint else 0
         binary_data = data.encode('UTF-8')
         headers = {'content-type': 'application/xml'}
-        req = session.post(url, data=binary_data, headers=headers, stream=True)
+        req = self.session.post(url, data=binary_data, headers=headers, stream=True)
         root = etree.fromstring(req.text)
         if req.status_code == 200:
             return MMTReply(True, root)
