@@ -5,21 +5,21 @@
 First, you need to install the metakernel_echo library and dependencies:
 
 ```shell
-pip install metakernel_echo --upgrade
+pip install interview_kernel --upgrade
 ```
 
 Then, you need to install the metakernel echo kernel spec:
 
 ```shell
-python metakernel_echo install
+python interview_kernel install
 ```
 
 ## Running
 
-You can then run the metakernel_echo kernel as a console, notebook, etc.:
+You can then run the interview_kernel kernel as a console, notebook, etc.:
 
 ```shell
-jupyter console --kernel=metakernel_echo
+jupyter console --kernel=interview_kernel
 ```
 
 ## Dependencies
