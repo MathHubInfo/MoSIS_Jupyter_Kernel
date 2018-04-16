@@ -1,4 +1,8 @@
-# cf. https://pypi.python.org/pypi/twine
+# cf. https://pypi.python.org/pypi/twine:
+# $ python setup.py sdist bdist_wheel
+# $ twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+# or
+# $ twine upload --repository testpypi dist/*
 
 from setuptools import setup
 
@@ -13,14 +17,16 @@ setup(
     description='A Jupyter kernel that interviews you for a PDE model and \
                     transforms it into an ExaStencils simulation.',
     python_requires=">=3.4",
-    # replicating contents of MANIFEST, cf.
+    # replicating contents of MANIFEST,
+    # cf.https://stackoverflow.com/questions/7522250/how-to-include-package-data-with-setuptools-distribute/14159430#14159430
     package_data={
         'interview_kernel/exastencils': ['interview_kernel/exastencils/compiler.jar',
                                             'interview_kernel/exastencils/generate_compile_and_run_list.sh',
                                             'interview_kernel/exastencils/lib/*.*'],
     },
+    zip_safe=False,
     # use_scm_version=True,
-    setup_requires=['setuptools_scm'],
+    setup_requires=['setuptools_scm'],  # or possibly https://pypi.python.org/pypi/setuptools-git
     install_requires=['transitions', 'bokeh', 'requests', 'pylatexenc', 'metakernel', 'lxml', 'IPython',
                       'jupyter_client', 'ipywidgets']
 )

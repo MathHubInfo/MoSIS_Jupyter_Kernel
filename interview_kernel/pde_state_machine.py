@@ -381,7 +381,8 @@ class PDE_States:
                 self.new_theory(parameter_name)
                 # we might need the other parameters created so far, so use them
                 for otherparamentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
-                    self.include_in(parameter_name, otherparamentry)
+                    if otherparamentry in userstring:
+                        self.include_in(parameter_name, otherparamentry)
 
                 # sanitize userstring - check if this works for all cases
                 parsestring = string_handling.add_ods(userstring)
@@ -451,12 +452,13 @@ class PDE_States:
                 subdict["rhsstring_expanded"] = self.try_expand(subdict["rhsstring"])  # TODO expand properly
 
                 # to make the left-hand side a function on x, place " [ variablename : domainname ] " in front
+                lambda_x = " [ x : " + self.simdata["domain"]["name"] + " ] "
                 if "x" in parts[0]:
-                    parts[0] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[0]
+                    parts[0] = lambda_x + parts[0]
                 # right-hand side: infer type, make function if not one yet
                 if not string_handling.type_is_function_from(self.get_inferred_type(subdict["theoryname"], parts[1]),
                                              self.simdata["domain"]["name"]):
-                    parts[1] = " [ x : " + self.simdata["domain"]["name"] + " ] " + parts[1]
+                    parts[1] = lambda_x + parts[1]
 
                 # in lhs replace all unknown names used by more generic ones and add lambda clause in front
                 for unkname in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
@@ -821,18 +823,19 @@ class PDE_States:
                 self.mmtinterface.mmt_new_theory(mpd_theory_name)
                 self.include_in(mpd_theory_name, pde_names[pde_number])
 
-                # include all the mpd_unknowns, parameters and bcs
-                for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
-                    self.include_in(mpd_theory_name, "MPD_" + unknownentry)
+                # include all the mpd_unknowns, and parameters
 
                 for paramentry in string_handling.get_recursively(self.simdata["parameters"], "theoryname"):
                     if paramentry in pde['string']:
                         self.include_in(mpd_theory_name, paramentry)
 
-                self.add_list_of_declarations(mpd_theory_name, [
-                    str("proof_" + str(pde_number) + " : ⊦ " + pde["lhsstring"] + " ≐ " + pde["rhsstring"] +
-                    string_handling.object_delimiter + " role Law")
-                ])
+                for unknownentry in string_handling.get_recursively(self.simdata["unknowns"], "theoryname"):
+                    # TODO make more robust + rework for more unknowns
+                    self.include_in(mpd_theory_name, "MPD_" + unknownentry)
+                    self.add_list_of_declarations(mpd_theory_name, [
+                        str("proof_" + str(pde_number) + " : ⊦ " + pde["lhsstring"].replace(unknownentry, " " + unknownentry)
+                            + " ≐ " + pde["rhsparsestring"] + string_handling.object_delimiter + " role Law")
+                    ])
 
         with CriticalSubdict(self.simdata[self.state], self.poutput):
             mpd_theory_name = "MPD_bcs"

@@ -267,12 +267,15 @@ Otherwise, you can always answer with \LaTeX-type input.
             thynames = get_recursively(self.state_machine.simdata, "theoryname")
             # if thynames:
             #    url_args_dict["highlight"] = ",".join(thynames)
+            # for now, highlight the "persistent ephemeral" theories, cf https://github.com/UniFormal/MMT/issues/326
+            url_args_dict["highlight"] = "actual*,ephemeral*,u,q,α,SHE"
         else:
             model_name = self.state_machine.generate_mpd_theories()
-            if model_name is None:  # Fallback for now, because ephemeral theories are not yet accessible to tgview
+            if model_name is None:
                 model_name = "Model"
             url_args_dict = dict(type="mpd",
-                                 graphdata=self.state_machine.mmtinterface.namespace + "?" + model_name)
+                                 graphdata=self.state_machine.mmtinterface.namespace + "?" + model_name,
+                                 highlight="MPD_pde*")
 
         # have the side bars go away
         url_args_dict["viewOnlyMode"] = "true"
