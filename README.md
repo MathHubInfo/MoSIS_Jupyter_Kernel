@@ -6,8 +6,7 @@ from this directory, run
 ```shell
 pip install .
 python setup.py install
-cd interview_kernel
-python install.py
+python -m interview_kernel.install
 ```
 
 ## Running
@@ -18,7 +17,8 @@ You can then run the interview_kernel kernel as a console, notebook, etc.:
 jupyter console --kernel=interview_kernel
 ```
 
-## Dependencies
+or 
 
-1. IPython 3
-1. MetaKernel (installed with pip)
+```shell
+jupyter notebook --kernel=interview_kernel
+```

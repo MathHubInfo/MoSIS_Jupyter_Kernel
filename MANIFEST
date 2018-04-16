@@ -1,3 +1,0 @@
-include interview_kernel/exastencils/compiler.jar
-include interview_kernel/exastencils/generate_compile_and_run_list.sh
-recursive-include interview_kernel/exastencils/lib *.*

@@ -20,12 +20,15 @@ setup(
     # replicating contents of MANIFEST,
     # cf.https://stackoverflow.com/questions/7522250/how-to-include-package-data-with-setuptools-distribute/14159430#14159430
     package_data={
-        'interview_kernel': ['interview_kernel/exastencils/compiler.jar',
-                                            'interview_kernel/exastencils/generate_compile_and_run_list.sh',
-                                            'interview_kernel/exastencils/lib/*.*'],
+        'interview_kernel': ['exastencils/compiler.jar',
+                             'exastencils/generate_compile_and_run_list.sh',
+                             'exastencils/lib/*.*'],
     },
+#    data_files=[
+#    ],
     zip_safe=False,
     # use_scm_version=True,
     setup_requires=['setuptools_scm'],  # or possibly https://pypi.python.org/pypi/setuptools-git
-    install_requires=['transitions', 'bokeh', 'requests', 'pylatexenc', 'metakernel', 'lxml', 'IPython', 'jupyter_client', 'ipywidgets']
+    install_requires=['transitions', 'bokeh', 'pandas', 'requests', 'pylatexenc', 'metakernel', 'lxml',
+                      'IPython', 'jupyter_client', 'ipywidgets']
 )
