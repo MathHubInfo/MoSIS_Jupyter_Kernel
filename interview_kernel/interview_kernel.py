@@ -13,14 +13,19 @@ from pylatexenc.latex2text import LatexNodes2Text
 import getpass
 from bokeh.io import output_notebook
 
-from pde_state_machine import *
-from string_handling import build_url, get_recursively
+#from . import pde_state_machine
+import pde_state_machine
+#from . import string_handling
+import string_handling
 from distutils.util import strtobool
 
 
 """This is a Jupyter kernel derived from MetaKernel. To use it, install it with the install.py script and run 
 "jupyter notebook --debug --NotebookApp.token='' " from terminal. """
+
+
 class Interview(MetaKernel):
+
     implementation = 'Interview'
     implementation_version = '0.1'
     language = 'text'
@@ -55,7 +60,7 @@ Otherwise, you can always answer with \LaTeX-type input.
 
     def __init__(self, **kwargs):
 
-        self.state_machine = PDE_States(self.poutput, self.update_prompt, self.please_prompt, self.display_html)
+        self.state_machine = pde_state_machine.PDE_States(self.poutput, self.update_prompt, self.please_prompt, self.display_html)
 
         # call superclass constructor
         super(Interview, self).__init__(**kwargs)
@@ -255,7 +260,7 @@ Otherwise, you can always answer with \LaTeX-type input.
             url_args_dict = dict(type="pgraph",
                                  graphdata=self.state_machine.mmtinterface.namespace)
             # if applicable, highlight the ephemeral parts https://github.com/UniFormal/TGView/issues/25
-            thynames = get_recursively(self.state_machine.simdata, "theoryname")
+            thynames = string_handling.get_recursively(self.state_machine.simdata, "theoryname")
             # if thynames:
             #    url_args_dict["highlight"] = ",".join(thynames)
             # for now, highlight the "persistent ephemeral" theories, cf https://github.com/UniFormal/MMT/issues/326
@@ -271,8 +276,8 @@ Otherwise, you can always answer with \LaTeX-type input.
         # have the side bars go away
         url_args_dict["viewOnlyMode"] = "true"
 
-        tgview_url = build_url(server_url, "graphs/tgview.html", args_dict=url_args_dict)
-        #print(tgview_url)
+        tgview_url = string_handling.build_url(server_url, "graphs/tgview.html", args_dict=url_args_dict)
+        # print(tgview_url)
 
         code = """
             <iframe 

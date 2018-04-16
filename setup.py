@@ -9,7 +9,7 @@ from setuptools import setup
 setup(
     name='interview_kernel',
     version='0.1.0',
-    packages=['interview_kernel', 'interview_kernel/exastencils'],
+    packages=['interview_kernel'],
     url='https://gl.kwarc.info/theresa_pollinger/MoSIS',
     license='MIT',
     author='Theresa Pollinger',
@@ -20,13 +20,12 @@ setup(
     # replicating contents of MANIFEST,
     # cf.https://stackoverflow.com/questions/7522250/how-to-include-package-data-with-setuptools-distribute/14159430#14159430
     package_data={
-        'interview_kernel/exastencils': ['interview_kernel/exastencils/compiler.jar',
+        'interview_kernel': ['interview_kernel/exastencils/compiler.jar',
                                             'interview_kernel/exastencils/generate_compile_and_run_list.sh',
                                             'interview_kernel/exastencils/lib/*.*'],
     },
     zip_safe=False,
     # use_scm_version=True,
     setup_requires=['setuptools_scm'],  # or possibly https://pypi.python.org/pypi/setuptools-git
-    install_requires=['transitions', 'bokeh', 'requests', 'pylatexenc', 'metakernel', 'lxml', 'IPython',
-                      'jupyter_client', 'ipywidgets']
+    install_requires=['transitions', 'bokeh', 'requests', 'pylatexenc', 'metakernel', 'lxml', 'IPython', 'jupyter_client', 'ipywidgets']
 )

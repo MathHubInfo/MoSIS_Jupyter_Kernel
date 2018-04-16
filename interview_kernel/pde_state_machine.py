@@ -249,7 +249,7 @@ class PDE_States:
 
     ##### for state domain
     def domain_begin(self):
-        self.poutput("What is the domain in your model?     Ω : type ❘ = [?;?], e.g. `\\Omega = [0.0;1.0]`")
+        self.poutput("What is the domain in your model?     Ω : type ❘ = [?;?], e.g. `\\\\Omega = [0.0;1.0]`")
         # self.poutput("By the way, you can always try and use LaTeX-type input.")
         self.simdata[self.state]["axes"] = OrderedDict()
         self.domain_mmt_preamble()
@@ -950,6 +950,8 @@ class PDE_States:
 
     def recap(self, userstring=None):  # TODO
         self.print_simdata()
+        self.print_empty_line()
+        self.poutput("You can inspect the persistently loaded MMT theories under " + self.mmtinterface.mmt_base_url)
 
     def print_simdata(self):
         self.poutput("These are the things we know so far about your problem:")

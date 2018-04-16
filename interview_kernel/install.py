@@ -17,12 +17,10 @@ def install_my_kernel_spec(user=True, prefix=None):
         os.chmod(td, 0o755) # Starts off as 700, not user readable
         with open(os.path.join(td, 'kernel.json'), 'w') as f:
             json.dump(kernel_json, f, sort_keys=True)
-        # TODO: Copy any resources
         try:
-            # copyfile('./kernel.js', os.path.join(td, 'kernel.js'))
             interview = Interview()
             with open(os.path.join(td, 'kernel.js'), 'w') as f:
-                # javascript code that sets an initial markdown cell
+                # javascript code that sets an initial markdown cell in every new notebook
                 js = """define(['base/js/namespace'], function(Jupyter)
                         {{
                             function onload()
