@@ -22,3 +22,9 @@ jupyter notebook --kernel=interview_kernel
 You need to have a built version of http://mathhub.info/MitM/smglom/calculus (on branch cleanup) 
 and http://mathhub.info/MitM/smglom/calculus/differentialequations, which 
 can be found in mathhub archives MitM/smglom and MitM/MoSIS, respectively.
+
+To start the server in the MMT Shell::
+
+    server on port 9000
+    extension info.kwarc.mmt.interviews.InterviewServer
+    extension info.kwarc.mmt.api.ontology.RelationalReader
