@@ -11,13 +11,7 @@ python -m interview_kernel.install
 
 ## Running
 
-You can then run the interview_kernel kernel as a console, notebook, etc.:
-
-```shell
-jupyter console --kernel=interview_kernel
-```
-
-or 
+You can then run the interview_kernel kernel as a notebook:
 
 ```shell
 jupyter notebook --kernel=interview_kernel
