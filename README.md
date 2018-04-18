@@ -22,3 +22,9 @@ or
 ```shell
 jupyter notebook --kernel=interview_kernel
 ```
+
+## MMT dependencies
+
+You need to have a built version of http://mathhub.info/MitM/smglom/calculus/differentialequations 
+and http://mathhub.info/MitM/smglom/calculus/differentialequations, which 
+can be found in mathhub archives MitM/smglom and MitM/MoSIS, respectively.
