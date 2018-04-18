@@ -40,13 +40,13 @@ class Interview(MetaKernel):
     kernel_json = {
         "argv": [
             executable, "-m", "interview_kernel", "-f", "{connection_file}"],
-        "display_name": "TheInterview",
+        "display_name": "MoSIS",
         "language": "text",
         "name": "interview_kernel"
     }
 
     banner = \
-"""**Hello, """ + getpass.getuser() + """! I am TheInterview, your partial differential equations and simulations expert.**
+"""**Hello, """ + getpass.getuser() + """! I am MoSIS, your partial differential equations and simulations expert.**
 Let's set up a model and simulation together.
 
 To get explanations, enter `explain <optional keyword>`. 

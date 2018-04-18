@@ -202,7 +202,7 @@ class PDE_States:
 
     def greeting_exit(self):
         # username = getpass.getuser()
-        # self.poutput("Hello, " + username + "! I am TheInterview, your partial differential equations and simulations expert. "
+        # self.poutput("Hello, " + username + "! I am MoSIS, your partial differential equations and simulations expert. "
         #              "Let's set up a simulation together.")
         # self.poutput("")
         # self.poutput("To get explanations, enter \"explain <optional keyword>\". ")
@@ -211,8 +211,6 @@ class PDE_States:
         # self.poutput("Otherwise, you can always try and use LaTeX-type input.")
         # self.poutput("")
         # self.poutput("You can inspect the currently loaded MMT theories under " + self.mmtinterface.serverInstance)
-        # self.poutput("")
-        # self.poutput("")
         # self.poutput("")
         return
 
