@@ -46,8 +46,8 @@ class Interview(MetaKernel):
     }
 
     banner = \
-"""**Hello, """ + getpass.getuser() + """! I am MoSIS, your partial differential equations and simulations expert.**
-Let's set up a model and simulation together.
+"""**Hello, """ + getpass.getuser() + """! I am MoSIS 1.0, your partial differential equations and simulations tool.**
+Let's set up a model and simulation.
 
 To get explanations, enter `explain <optional keyword>`. 
 To see a recap of what we know so far, enter `recap <optional keyword>`. 
@@ -93,7 +93,7 @@ Otherwise, you can always answer with \LaTeX-type input.
     def do_execute_direct(self, code, silent=False, allow_stdin=True):
         """This is where the user input enters our code"""
 
-        arg = LatexNodes2Text().latex_to_text(code)
+        arg = string_handling.replace_times_to_cdot(LatexNodes2Text().latex_to_text(code))
 
         if not self.keyword_handling(arg):
             if not self.prompt_input_handling(arg):
@@ -173,6 +173,9 @@ Otherwise, you can always answer with \LaTeX-type input.
             return True
         if arg.startswith("widget"):
             self.display_widget()
+            return True
+        if arg.startswith("omdoc"):
+            self.poutput(self.state_machine.mmtinterface.get_omdoc_theories())
             return True
         return False
 

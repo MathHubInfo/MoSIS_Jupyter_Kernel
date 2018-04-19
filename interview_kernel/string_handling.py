@@ -187,5 +187,14 @@ def add_ods(string):
 def functionize(string, typename="Ω", varname="x"):
     return string.replace("=", "= [ " + varname + " : " + typename + "]")
 
+
 def split_string_at_AS(string):
     return re.split('AS', string)
+
+
+def replace_times_to_cdot(string):
+    return string.replace("·", "⋅").replace("*", "⋅")
+
+
+def replace_times_to_star(string):
+    return string.replace("·", "*").replace("⋅", "*")

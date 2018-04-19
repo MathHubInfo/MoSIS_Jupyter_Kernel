@@ -204,6 +204,7 @@ class MMTInterface:
         self.namespace = self.URIprefix + 'MitM/smglom/calculus/differentialequations'  # TODO
 
         self.debugprint = False
+        self.theories = []
 
     def mmt_new_theory(self, thyname):
         # So, ich hab mal was zu MMT/devel gepusht. Es gibt jetzt eine Extension namens InterviewServer. Starten tut man die mit "extension info.kwarc.mmt.interviews.InterviewServer"
@@ -211,7 +212,10 @@ class MMTInterface:
         # "http://localhost:8080/:interview/new?theory="<MMT URI>"" fügt eine neue theorie mit der uri <MMT URI> hinzu
         req = '/' + self.mmt_extension + '/new?theory=' + quote(self.get_mpath(
             thyname)) + '&meta=' + quote('http://mathhub.info/MitM/Foundation?Logic')
-        return self.http_request(req)
+        reply = self.http_request(req)
+        self.theories.append(thyname)
+        return reply
+
 
     def mmt_new_view(self, viewname, fromtheory, totheory):
         # analog für ?view="<MMT URI>".
@@ -284,6 +288,12 @@ class MMTInterface:
         if req.status_code == 200:
             return MMTReply(True, root)
         return MMTReply(False, root)
+
+    def get_omdoc_theories(self):
+        string = ""
+        for theory in self.theories:
+            string += self.query_for(theory).tostring() + "\n\n"
+        return string
 
 
 def add_dd(string):

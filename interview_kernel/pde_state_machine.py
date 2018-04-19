@@ -138,7 +138,7 @@ class PDE_States:
                           #"http://mathhub.info/MitM/smglom/calculus?higherderivative"]),
             ('parameters', ["http://mathhub.info/MitM/smglom/arithmetics?RealArithmetics", "ephdomain",
                             "http://mathhub.info/MitM/Foundation?Math"]),
-            ('pdes', ["mDifferentialOperators"]),  # +params, unknowns,
+            ('pdes', ["mDifferentialOperators", "mFunctionArithmetics"]),  # +params, unknowns,
             ('bcs',
              ["ephdomain", "mLinearity", "mDifferentialOperators",
               "http://mathhub.info/MitM/smglom/arithmetics?RealArithmetics"]),  # +params, unknowns, pdes, bctypes
@@ -502,7 +502,7 @@ class PDE_States:
                 # TODO query number of effective pdes and unknowns from mmt for higher dimensional PDEs
                 # => can assume each to be ==1 for now
                 numpdesgiven = len(self.simdata["pdes"]["pdes"])
-                self.poutput("Ok, " + reply.tostring())
+                self.poutput("Ok, this is what this looks like in omdoc: " + reply.tostring())
                 if numpdesgiven == len(self.simdata["unknowns"]):
                     self.trigger('pdes_parsed')
                 elif numpdesgiven > len(self.simdata["unknowns"]):
