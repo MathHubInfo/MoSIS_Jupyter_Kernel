@@ -1,4 +1,3 @@
-from sys import executable
 from os.path import join
 #from pathlib import Path
 
@@ -35,14 +34,6 @@ class Interview(MetaKernel):
         'mimetype': 'text/plain',
         'file_extension': '.txt',
         'help_links': MetaKernel.help_links,
-    }
-
-    kernel_json = {
-        "argv": [
-            executable, "-m", "interview_kernel", "-f", "{connection_file}"],
-        "display_name": "MoSIS",
-        "language": "text",
-        "name": "interview_kernel"
     }
 
     banner = \
