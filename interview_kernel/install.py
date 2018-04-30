@@ -9,7 +9,15 @@ from jupyter_client.kernelspec import KernelSpecManager
 from IPython.utils.tempdir import TemporaryDirectory
 from shutil import copyfile
 
-kernel_json = Interview.kernel_json
+
+
+kernel_json = {
+    "argv": [
+        sys.executable, "-m", "interview_kernel", "-f", "{connection_file}"],
+    "display_name": "MoSIS",
+    "language": "text",
+    "name": "interview_kernel"
+}
 
 
 def install_my_kernel_spec(user=True, prefix=None):
@@ -42,7 +50,7 @@ def install_my_kernel_spec(user=True, prefix=None):
 
         except Exception:
             print('could not copy kernel.js, will not see initial message in notebook')
-            raise
+            #raise
 
         print("Installing Jupyter kernel spec")
         KernelSpecManager().install_kernel_spec(td, 'Interview', user=user, prefix=prefix)
