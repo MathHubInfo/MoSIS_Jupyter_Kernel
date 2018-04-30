@@ -958,7 +958,8 @@ class PDE_States:
     def recap(self, userstring=None):  # TODO
         self.print_simdata()
         self.print_empty_line()
-        self.poutput("You can inspect the persistently loaded MMT theories under " + self.mmtinterface.mmt_base_url)
+        # self.poutput("You can inspect the persistently loaded MMT theories under " + self.mmtinterface.mmt_base_url)
+        #TODO
 
     def print_simdata(self):
         self.poutput("These are the things we know so far about your problem:")

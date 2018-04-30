@@ -82,11 +82,10 @@ class ExaOutput:
         pde_rhs = self.replace_x(self.replace_cdot(simdata["pdes"]["pdes"][-1]["rhsstring_expanded"]))
         unknowns = [*simdata["unknowns"]]
         first_unknown = unknowns[0]
-        with open(l1path, 'w') as l1:
-            l1.write(
+        self.l1_string = str(
                 "/// inline knowledge \n"
                 "Knowledge { \n"
-                "  dimensionality = " + str(simdata["num_dimensions"]) + " \n" 
+                "  dimensionality = " + str(simdata["num_dimensions"]) + " \n"
                 " \n"
                 "  minLevel       = 5 \n"
                 "  maxLevel       = 15 \n"
@@ -94,15 +93,15 @@ class ExaOutput:
                 " \n"
                 "/// problem specification \n"
                 " \n"
-                "Domain \Omega = ( " + str(simdata["domain"]["from"]) + ", " + str(simdata["domain"]["to"]) + " ) \n" 
+                "Domain \Omega = ( " + str(simdata["domain"]["from"]) + ", " + str(simdata["domain"]["to"]) + " ) \n"
                 " \n"
-                "Field f@finest \in \Omega = " + pde_rhs + " \n" 
-                "Field " + first_unknown + " \in \Omega = 0.0 \n" 
+                "Field f@finest \in \Omega = " + pde_rhs + " \n"
+                "Field " + first_unknown + " \in \Omega = 0.0 \n"
                 " \n"
                 "Field " + first_unknown + "@finest \in \partial \Omega = " + bc_rhs + " \n" #"sin ( 0.5 * PI * vf_boundaryCoord_x ) \n" #TODO expand
                 "Field " + first_unknown + "@(all but finest) \in \partial \Omega = 0.0 \n"
                 " \n"
-                "Operator op = " + op + " // alt: - \partial_{xx} \n" 
+                "Operator op = " + op + " // alt: - \partial_{xx} \n"
                 " \n"
                 "Equation " + first_unknown + "Eq@finest           op * " + first_unknown + " == f \n" #insert pde
                 "Equation " + first_unknown + "Eq@(all but finest) op * " + first_unknown + " == 0.0 \n"
@@ -132,8 +131,9 @@ class ExaOutput:
                 "  // parameters \n"
                 "  l4_genDefaultApplication = true \n"
                 "  l4_defAppl_FieldToPrint = \"" + first_unknown + "\" \n" #TODO
-                "} \n"
-           )
+                "} \n")
+        with open(l1path, 'w') as l1:
+            l1.write(self.l1_string)
 
     def replace_x(self, string):
         return string.replace("x", "vf_nodePosition_x@current")

@@ -26,9 +26,9 @@ from distutils.util import strtobool
 class Interview(MetaKernel):
 
     implementation = 'Interview'
-    implementation_version = '0.1'
+    implementation_version = '1.0'
     language = 'text'
-    language_version = '0.1'
+    language_version = '1.0'
     language_info = {
         'name': 'text',
         'mimetype': 'text/plain',
@@ -40,13 +40,13 @@ class Interview(MetaKernel):
 """**Hello, """ + getpass.getuser() + """! I am MoSIS 1.0, your partial differential equations and simulations tool.**
 Let's set up a model and simulation.
 
-To get explanations, enter `explain <optional keyword>`. 
 To see a recap of what we know so far, enter `recap <optional keyword>`. 
 To interactively visualize the current theory graph, enter `tgwiev` or `tgview mpd`. 
 Otherwise, you can always answer with \LaTeX-type input.
 
 
 """
+    #To get explanations, enter `explain <optional keyword>`.
     #You can inspect the currently loaded MMT theories under http://localhost:43397  #TODO
 
     def __init__(self, install_run=False, **kwargs):
