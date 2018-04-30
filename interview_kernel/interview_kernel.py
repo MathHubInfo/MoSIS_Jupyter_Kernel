@@ -58,9 +58,7 @@ Otherwise, you can always answer with \LaTeX-type input.
 """
     #You can inspect the currently loaded MMT theories under http://localhost:43397  #TODO
 
-    def __init__(self, **kwargs):
-
-        self.state_machine = pde_state_machine.PDE_States(self.poutput, self.update_prompt, self.please_prompt, self.display_html)
+    def __init__(self, install_run=False, **kwargs):
 
         # call superclass constructor
         super(Interview, self).__init__(**kwargs)
@@ -70,17 +68,25 @@ Otherwise, you can always answer with \LaTeX-type input.
         # from metakernel import register_ipython_magics
         # register_ipython_magics()
 
-        self.update_prompt()
         self.poutstring = ""# to collect string output to send
         self.outstream_name = 'stdout'
 
-        # already send some input to state machine, to capture initial output and have it displayed via kernel.js
-        self.state_machine.handle_state_dependent_input("anything")   # TODO compatibility with not-notebook?
-        self.my_markdown_greeting = Interview.banner + self.poutstring
-        self.poutstring = ""
+        self.state_machine, self.my_markdown_greeting = self.set_initial_message(install_run)
 
+        self.update_prompt()
         # bokeh notebook setup
         output_notebook()
+
+    def set_initial_message(self, install_run=False):
+        # set it up -- without server communication capabilities if we are just installing
+        self.state_machine = pde_state_machine.PDE_States(self.poutput, self.update_prompt, self.please_prompt,
+                                                     self.display_html, install_run)
+        # already send some input to state machine, to capture initial output and have it displayed via kernel.js
+        # /  not displayed in the real thing
+        self.state_machine.handle_state_dependent_input("anything")   # TODO compatibility with not-notebook?
+        my_markdown_greeting = Interview.banner + self.poutstring
+        self.poutstring = ""
+        return self.state_machine, my_markdown_greeting
 
     def poutput(self, text, outstream_name='stdout'):
         """Accumulate the output here"""

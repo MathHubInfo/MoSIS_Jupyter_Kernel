@@ -18,7 +18,7 @@ def install_my_kernel_spec(user=True, prefix=None):
         with open(os.path.join(td, 'kernel.json'), 'w') as f:
             json.dump(kernel_json, f, sort_keys=True)
         try:
-            interview = Interview()
+            interview = Interview(True)
             with open(os.path.join(td, 'kernel.js'), 'w') as f:
                 # javascript code that sets an initial markdown cell in every new notebook
                 js = """define(['base/js/namespace'], function(Jupyter)

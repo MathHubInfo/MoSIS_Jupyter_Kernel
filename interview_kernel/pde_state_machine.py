@@ -67,7 +67,8 @@ class CriticalSubdict():
 class PDE_States:
     """Just a state machine using pytranisitions that walks our theory graph and creates ephemeral theories and views"""
 
-    def __init__(self, output_function, after_state_change_function, prompt_function, display_html_function=None):
+    def __init__(self, output_function, after_state_change_function, prompt_function, display_html_function=None,
+                 install_run=False):
         # just act like we were getting the right replies from MMT
         self.cheating = True
 
@@ -180,7 +181,13 @@ class PDE_States:
 
         self.exaout = None
 
-        self.mmtinterface = MMTInterface()
+        self.install_run = install_run
+
+        if self.install_run:
+            self.mmtinterface = None
+        else:
+            self.mmtinterface = MMTInterface()
+
         #with MMTInterface() as self.mmtinterface:
         """Variables to signal callbacks depending on yes/no prompts"""
         self.prompted = False
@@ -277,7 +284,9 @@ class PDE_States:
     def domain_mmt_preamble(self):
         # set the current MMT theoryname for parsing the input TODO use right dimension
         self.simdata[self.state]["theoryname"] = "ephdomain"
-        self.new_theory(self.simdata[self.state]["theoryname"])
+
+        if not self.install_run:
+            self.new_theory(self.simdata[self.state]["theoryname"])
         # (ok, root) = self.mmtinterface.query_for(self.simdata[self.state]["theoryname"])
 
     def domain_mmt_postamble(self):
