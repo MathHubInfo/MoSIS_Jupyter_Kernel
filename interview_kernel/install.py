@@ -46,7 +46,7 @@ def install_my_kernel_spec(user=True, prefix=None):
                         }});""".format(interview.my_markdown_greeting.replace("`", "\\`"))
 
                 f.write(js)
-                print(js)
+                # print(js)
 
         except Exception:
             print('could not copy kernel.js, will not see initial message in notebook')
@@ -59,7 +59,7 @@ def _is_root():
     try:
         return os.geteuid() == 0
     except AttributeError:
-        return False # assume not an admin on non-Unix platforms
+        return False  # assume not an admin on non-Unix platforms
 
 def main(argv=None):
     ap = argparse.ArgumentParser()

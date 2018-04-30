@@ -277,7 +277,6 @@ Otherwise, you can always answer with \LaTeX-type input.
         url_args_dict["viewOnlyMode"] = "true"
 
         tgview_url = string_handling.build_url(server_url, "graphs/tgview.html", args_dict=url_args_dict)
-        # print(tgview_url)
 
         code = """
             <iframe 
@@ -288,6 +287,7 @@ Otherwise, you can always answer with \LaTeX-type input.
         """.format(tgview_url)
 
         self.display_html(code)
+        print(tgview_url)
 
     def display_widget(self):
         # needs jupyter nbextension enable --py widgetsnbextension
