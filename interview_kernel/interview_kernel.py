@@ -90,7 +90,7 @@ Otherwise, you can always answer with \LaTeX-type input.
     def do_execute_direct(self, code, silent=False, allow_stdin=True):
         """This is where the user input enters our code"""
 
-        arg = string_handling.replace_times_to_cdot(LatexNodes2Text().latex_to_text(code))
+        arg = string_handling.replace_times_to_cdot(LatexNodes2Text().latex_to_text(code)).strip()
 
         if not self.keyword_handling(arg):
             if not self.prompt_input_handling(arg):
@@ -101,12 +101,6 @@ Otherwise, you can always answer with \LaTeX-type input.
                 # string output
                 stream_content = {'name': self.outstream_name, 'text': self.poutstring}
                 self.send_response(self.iopub_socket, 'stream', stream_content)
-            #    data_content = {
-            #                        "ename": "InterviewError",
-            #                        "evalue": self.poutstring,
-            #                        "traceback": [self.poutstring],
-            #                    }
-            #    self.send_response(self.iopub_socket, 'error', data_content)
             else:
                 # for other mime types, cf. http://ipython.org/ipython-doc/stable/notebook/nbformat.html
                 data_content = {"data": {

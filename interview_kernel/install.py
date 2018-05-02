@@ -7,8 +7,9 @@ from .interview_kernel import Interview
 
 from jupyter_client.kernelspec import KernelSpecManager
 from IPython.utils.tempdir import TemporaryDirectory
-from shutil import copyfile
-
+import shutil
+import errno
+from pathlib import Path
 
 
 kernel_json = {
@@ -22,7 +23,7 @@ kernel_json = {
 
 def install_my_kernel_spec(user=True, prefix=None):
     with TemporaryDirectory() as td:
-        os.chmod(td, 0o755) # Starts off as 700, not user readable
+        os.chmod(td, 0o755)  # Starts off as 700, not user readable
         with open(os.path.join(td, 'kernel.json'), 'w') as f:
             json.dump(kernel_json, f, sort_keys=True)
         try:
@@ -50,10 +51,22 @@ def install_my_kernel_spec(user=True, prefix=None):
 
         except Exception:
             print('could not copy kernel.js, will not see initial message in notebook')
-            #raise
 
         print("Installing Jupyter kernel spec")
         KernelSpecManager().install_kernel_spec(td, 'Interview', user=user, prefix=prefix)
+
+        # copy exastencils directory to user's home
+        src = Path(os.path.dirname(__file__)).joinpath("./exastencils")
+        dest = Path.home().joinpath("./exastencils")
+        try:
+            shutil.copytree(src, dest)
+        except OSError as e:
+            # If the error was caused because the source wasn't a directory
+            if e.errno == errno.ENOTDIR:
+                shutil.copy(src, dest)
+            else:
+                print('Directory not copied. Error: %s' % e)
+
 
 def _is_root():
     try:

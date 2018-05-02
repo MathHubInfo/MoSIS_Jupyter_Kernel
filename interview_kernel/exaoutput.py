@@ -19,7 +19,7 @@ class ExaOutput:
         but only if simdata is given"""
     def __init__(self, simdata=None, username="user", probname=None):
         remove_ensuremaths()
-        self.exastencils_path = Path(os.path.dirname(__file__)).joinpath("./exastencils")
+        self.exastencils_path = Path.home().joinpath("./exastencils")
 
         self.username = username
 
@@ -179,7 +179,7 @@ class ExaOutput:
 
     def create_l4(self):
         l4path = str(self.filespath.with_suffix('.exa4'))
-        with open(l4path,'w') as l4:
+        with open(l4path, 'w') as l4:
             l4.write(
                 "Function Application ( ) : Unit { \n"
                 "   startTimer ( 'setup' ) \n"
@@ -227,13 +227,13 @@ class ExaOutput:
 
     def create_platform(self):
         platformpath = str(self.filespath) + '.platform'
-        with open(platformpath,'w') as platformfile:
+        with open(platformpath, 'w') as platformfile:
             for key in self.platform:
                 platformfile.write(self.format_key(key, self.platform))
 
     def create_knowledge(self):
         knowledgepath = str(self.filespath) + '.knowledge'
-        with open(knowledgepath,'w') as knowledgefile:
+        with open(knowledgepath, 'w') as knowledgefile:
 #            for key in self.knowledge:
 #                knowledgefile.write(self.format_key(key, self.knowledge))
             knowledgefile.write(
@@ -271,7 +271,8 @@ class ExaRunner:
     @lru_cache()
     def load_data(self, data_name="u"):  # TODO more dimensions
         import pandas as pd
-        data_path = self.exaout.exastencils_path.joinpath("generated").joinpath(self.exaout.probname).joinpath(data_name).with_suffix(".dat")
+        data_path = self.exaout.exastencils_path.joinpath("generated").joinpath(self.exaout.probname)\
+                                                .joinpath(data_name).with_suffix(".dat")
         df = pd.read_csv(data_path, sep=' ', index_col=0)
         try:
             df.columns = [data_name]
