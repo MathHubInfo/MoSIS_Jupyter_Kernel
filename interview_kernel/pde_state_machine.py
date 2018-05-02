@@ -6,6 +6,7 @@ from collections import OrderedDict
 
 import getpass
 import re
+from html import escape
 
 from . import string_handling
 from .exaoutput import ExaOutput, ExaRunner
@@ -65,10 +66,10 @@ class CriticalSubdict():
 
 
 class PDE_States:
-    """Just a state machine using pytranisitions that walks our theory graph and creates ephemeral theories and views"""
+    """A state machine using pytranisitions that walks our theory graph and creates ephemeral theories and views"""
 
     def __init__(self, output_function, after_state_change_function, prompt_function, display_html_function=None,
-                 install_run=False):
+                 install_run=False, toggle_show_button=None):
         # just act like we were getting the right replies from MMT
         self.cheating = True
 
@@ -76,6 +77,7 @@ class PDE_States:
         self.poutput = output_function
         self.please_prompt = prompt_function
         self.display_html = display_html_function
+        self.toggle_show_button = toggle_show_button
 
         # Initialize a state machine
         self.states = [
@@ -371,7 +373,7 @@ class PDE_States:
         self.print_empty_line()
         self.poutput(
             "Would you like to name additional parameters like constants or functions (that are independent of your \
-            unknowns)?  c : ℝ = ? or f : Ω ⟶ ℝ = ?, e.g. `\\\\Omega = [0.0;1.0]`")  # ℝ
+            unknowns)?  c : ℝ = ? or f : Ω ⟶ ℝ = ?, e.g. `k = x \\cdot x`")  # ℝ
         self.simdata["parameters"] = OrderedDict()
 
     def parameters_handle_input(self, userstring):
@@ -431,7 +433,7 @@ class PDE_States:
     ##### for state pdes
     def pdes_begin(self):
         self.poutput(
-            "Let's talk about your partial differential equation(s). What do they look like? Δu = 0.0, or laplace_operator Ω ℝ u = f ?")
+            "Let's talk about your partial differential equation(s). What do they look like? e.g. `Δu = 0.0` ?")
         self.simdata["pdes"]["pdes"] = []
 
     def pdes_handle_input(self, userstring):
@@ -511,7 +513,8 @@ class PDE_States:
                 # TODO query number of effective pdes and unknowns from mmt for higher dimensional PDEs
                 # => can assume each to be ==1 for now
                 numpdesgiven = len(self.simdata["pdes"]["pdes"])
-                self.poutput("Ok, this is what this looks like in omdoc: " + reply.tostring())
+                # self.poutput("Ok, this is what this looks like in omdoc: " + reply.tostring())
+                self.toggle_show_button("Show PDE as omdoc", escape(reply.tostring())) #TODO
                 if numpdesgiven == len(self.simdata["unknowns"]):
                     self.trigger('pdes_parsed')
                 elif numpdesgiven > len(self.simdata["unknowns"]):
@@ -525,7 +528,7 @@ class PDE_States:
     ##### for state bcs
     def bcs_begin(self):
         self.poutput("Let's discuss your boundary conditions. "
-                     "What do they look like? u(x) = f(x) or u(" + str(self.simdata["domain"]["to"]) + ") = \\alpha ?")
+                     "What do they look like? u = f or u(" + str(self.simdata["domain"]["to"]) + ") = \\alpha ?")
         with CriticalSubdict(self.simdata["bcs"], self.poutput) as subdict:
             subdict["theoryname"] = "ephbcs"
             subdict["bcs"] = []
@@ -645,39 +648,6 @@ class PDE_States:
                     "include ?mDifferentialOperators = ?mDifferentialOperators" + string_handling.declaration_delimiter +
                 string_handling.module_delimiter
             ])
-#                subdict["bctypes"] = {}
-#                bctypetheoryname = unknown + "BCTypes"
-#                subdict["bctypes"]["theoryname"] = bctypetheoryname
-#                self.new_theory(bctypetheoryname)
-#                self.include_in(bctypetheoryname, unknown)
-#                self.include_in(bctypetheoryname, "mDifferentialOperators")
-#                self.add_list_of_declarations(bctypetheoryname,
-#                                              [
-#                                                  "myDirichletBC: {where: " + self.simdata["domain"][
-#                                                      "boundary_name"] + ", rhs: " +
-#                                                  self.simdata["unknowns"][unknown]["codomain"] + "}(" +
-#                                                  self.simdata["domain"]["name"] + " ⟶ " +
-#                                                  self.simdata["unknowns"][unknown]["codomain"] + ") ⟶ prop "
-#                                                                                                  " ❘ = [where, rhs][u] u where ≐ rhs ❘  # solutionat 1 is 2 ",
-#                                                  "myDirichletBCfun : {rhs: " + self.simdata["domain"][
-#                                                      "boundary_name"] + " ⟶ " +
-#                                                  self.simdata["unknowns"][unknown]["codomain"] + " }(" +
-#                                                  self.simdata["domain"]["name"] + " ⟶ " +
-#                                                  self.simdata["unknowns"][unknown][
-#                                                      "codomain"] + ") ⟶ prop ❘ = [rhs] [u] ∀[x:" +
-#                                                  self.simdata["domain"]["boundary_name"] + " ] u x ≐ rhs x "
-#                                                                                            "❘ # solutionatboundaryis 1",
-#                                              ]
-#                                              )
-#                viewname = bctypetheoryname + "ASmBCTypes"
-#                subdict["bctypes"]["viewname"] = viewname
-#                self.mmtinterface.mmt_new_view(viewname, "mBCTypes", bctypetheoryname)
-#                self.include_former_views(viewname)
-#                self.add_list_of_declarations(viewname,
-#                                              ["DirichletBC = myDirichletBC ",
-#                                               # " = myDirichletBCfun"
-#                                               ])
-#                return bctypetheoryname  # Todo adapt for more than 1
 
     ##### for state props
     def props_begin(self):
@@ -765,6 +735,7 @@ class PDE_States:
         # generate output
         self.exaout = ExaOutput(self.simdata, getpass.getuser(), problem_name)
         print("Generated ExaStencils input; running ExaStencils")
+        self.toggle_show_button("Show .exa1 code", self.exaout.l1_string)
         # generate and run simulation
         runner = ExaRunner(self.exaout)
         runner.run_exastencils()
@@ -915,7 +886,7 @@ class PDE_States:
                 except MMTServerError as error:
                     # self.poutput("no backend available that is applicable to " + "http://mathhub.info/MitM/smglom/calculus" + "?" + re.split('AS', dictentry["viewname"])[-1] + "?")
                     # we are expecting errors if we try to include something that is not referenced in the source theory, so ignore them
-                    expected_str = "no backend available that is applicable to " + self.mmtinterface.namespace + "?" + re.split('AS', current_view_name)[-1] + "?"
+                    expected_str = "no backend available that is applicable to " + self.mmtinterface.namespace
                     if expected_str not in error.args[0]:
                         raise
 
@@ -958,7 +929,7 @@ class PDE_States:
     def recap(self, userstring=None):  # TODO
         self.print_simdata()
         self.print_empty_line()
-        self.poutput("You can inspect the persistently loaded MMT theories under " + self.mmtinterface.mmt_frontend_base_url)
+        # self.poutput("You can inspect the persistently loaded MMT theories under " + self.mmtinterface.mmt_frontend_base_url)
         #TODO
 
     def print_simdata(self):

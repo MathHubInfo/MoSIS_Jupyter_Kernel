@@ -22,6 +22,7 @@ class ExaOutput:
         self.exastencils_path = Path.home().joinpath("./exastencils")
 
         self.username = username
+        self.l1_string = ""
 
         if probname is None:
             self.probname = self.username
@@ -77,7 +78,7 @@ class ExaOutput:
     def create_l1(self, simdata):
         l1path = str(self.filespath.with_suffix('.exa1'))
         domain_name = utf8tolatex(simdata["domain"]["name"], non_ascii_only=True, brackets=False)
-        op = utf8tolatex(simdata["pdes"]["pdes"][-1]["op"], non_ascii_only=True, brackets=False)
+        op = utf8tolatex(self.replace_cdot(simdata["pdes"]["pdes"][-1]["op"]), non_ascii_only=True, brackets=False)
         bc_rhs = self.replace_cdot(self.replace_boundary_x(simdata["bcs"]["bcs"][-1]["rhsstring_expanded"])) #TODO expand
         pde_rhs = self.replace_x(self.replace_cdot(simdata["pdes"]["pdes"][-1]["rhsstring_expanded"]))
         unknowns = [*simdata["unknowns"]]

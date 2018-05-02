@@ -63,6 +63,7 @@ Otherwise, you can always answer with \LaTeX-type input.
         self.outstream_name = 'stdout'
 
         self.state_machine, self.my_markdown_greeting = self.set_initial_message(install_run)
+        self.toggle_button_counter = 0
 
         self.update_prompt()
         # bokeh notebook setup
@@ -71,7 +72,7 @@ Otherwise, you can always answer with \LaTeX-type input.
     def set_initial_message(self, install_run=False):
         # set it up -- without server communication capabilities if we are just installing
         self.state_machine = pde_state_machine.PDE_States(self.poutput, self.update_prompt, self.please_prompt,
-                                                     self.display_html, install_run)
+                                                     self.display_html, install_run, self.toggle_show_button)
         # already send some input to state machine, to capture initial output and have it displayed via kernel.js
         # /  not displayed in the real thing
         self.state_machine.handle_state_dependent_input("anything")   # TODO compatibility with not-notebook?
@@ -196,6 +197,31 @@ Otherwise, you can always answer with \LaTeX-type input.
 
     def update_prompt(self):
         self.prompt = "(" + self.state_machine.state + ")" #TODO
+
+    def toggle_show_button(self, button_text, hidden_text):
+        # have a running id to uniquely identify the texts and buttons
+        self.toggle_button_counter += 1
+        counter_str = str(self.toggle_button_counter)
+        # use html line breaks and have html display verbatim
+        hidden_text = hidden_text.replace("\n", "<br>")
+
+        self.Display(HTML('''
+                    <div id="stacktrace''' + counter_str + '''"  style="display:none;"> ''' + hidden_text + '''</div>
+                    <input id="button''' + counter_str + '''" type="button" name="button''' + counter_str + '''" value="''' + button_text + '''" onclick="toggle()" />
+                    <script>
+                        function toggle() {
+                            var elem = document.getElementById("button''' + counter_str + '''")
+                            if(elem.value == "''' + button_text + '''"){
+                                elem.value = "Hide";
+                                document.getElementById("stacktrace''' + counter_str + '''").style.display = "block";
+                            }
+                            else {
+                                elem.value = "''' + button_text + '''";
+                                document.getElementById("stacktrace''' + counter_str + '''").style.display = "none";
+                            }
+                        }
+                    </script>
+            '''))
 
     # tab completion for empty lines
     def do_complete(self, code, cursor_pos):
