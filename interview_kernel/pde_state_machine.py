@@ -930,7 +930,7 @@ class PDE_States:
         self.print_simdata()
         self.print_empty_line()
         self.poutput("You can inspect the persistently loaded MMT theories under " +
-                     self.mmtinterface.mmt_frontend_base_url + ".")
+                     self.mmtinterface.mmt_frontend_base_url + " .")
 
     def print_simdata(self):
         self.poutput("These are the things we know so far about your problem:")
