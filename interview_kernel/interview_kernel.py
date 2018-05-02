@@ -307,7 +307,7 @@ Otherwise, you can always answer with \LaTeX-type input.
         """.format(tgview_url)
 
         self.display_html(code)
-        print(tgview_url)
+        # print(tgview_url)
 
     def display_widget(self):
         # needs jupyter nbextension enable --py widgetsnbextension
