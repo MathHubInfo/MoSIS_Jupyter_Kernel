@@ -191,6 +191,7 @@ class MMTInterface:
     def __init__(self):
         # get current mmt url
         self.mmt_base_url = os.environ.setdefault('MMT_BASE_URL', 'http://localhost:9000')
+        self.mmt_frontend_base_url = os.environ.setdefault('MMT_FRONTEND_BASE_URL', 'http://localhost:9000')
 
         # set up session
         self.session = requests.Session()

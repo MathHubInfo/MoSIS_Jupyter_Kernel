@@ -254,7 +254,7 @@ Otherwise, you can always answer with \LaTeX-type input.
 
         args = args.replace("tgview", '', 1).strip()
 
-        server_url = str(self.state_machine.mmtinterface.mmt_base_url)
+        server_url = str(self.state_machine.mmtinterface.mmt_frontend_base_url)
 
         if args == '':
             url_args_dict = dict(type="pgraph",

@@ -371,7 +371,7 @@ class PDE_States:
         self.print_empty_line()
         self.poutput(
             "Would you like to name additional parameters like constants or functions (that are independent of your \
-            unknowns)?  c : ℝ = ? or f : Ω ⟶ ℝ = ?")  # ℝ
+            unknowns)?  c : ℝ = ? or f : Ω ⟶ ℝ = ?, e.g. `\\\\Omega = [0.0;1.0]`")  # ℝ
         self.simdata["parameters"] = OrderedDict()
 
     def parameters_handle_input(self, userstring):
@@ -958,7 +958,7 @@ class PDE_States:
     def recap(self, userstring=None):  # TODO
         self.print_simdata()
         self.print_empty_line()
-        # self.poutput("You can inspect the persistently loaded MMT theories under " + self.mmtinterface.mmt_base_url)
+        self.poutput("You can inspect the persistently loaded MMT theories under " + self.mmtinterface.mmt_frontend_base_url)
         #TODO
 
     def print_simdata(self):
