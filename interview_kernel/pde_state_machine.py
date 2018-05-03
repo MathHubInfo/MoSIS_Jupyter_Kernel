@@ -314,7 +314,7 @@ class PDE_States:
 
     ##### for state unknowns
     def unknowns_begin(self):
-        self.poutput("Which variable(s) are you looking for? / What are the unknowns in your model?  u : " +
+        self.poutput("Which function(s) are you looking for? / What are the unknowns in your model?  u : " +
                      self.simdata["domain"]["name"] + " ⟶ ??,  e.g., u : " + self.simdata["domain"]["name"] + " ⟶ ℝ ?")
         self.simdata["unknowns"] = OrderedDict()
 
