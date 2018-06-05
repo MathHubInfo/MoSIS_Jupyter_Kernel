@@ -26,31 +26,37 @@ def install_my_kernel_spec(user=True, prefix=None):
         os.chmod(td, 0o755)  # Starts off as 700, not user readable
         with open(os.path.join(td, 'kernel.json'), 'w') as f:
             json.dump(kernel_json, f, sort_keys=True)
-        try:
-            interview = Interview(True)
-            with open(os.path.join(td, 'kernel.js'), 'w') as f:
-                # javascript code that sets an initial markdown cell in every new notebook
-                js = """define(['base/js/namespace'], function(Jupyter)
+        # try:
+        interview = Interview(True)
+        with open(os.path.join(td, 'kernel.js'), 'w') as f:
+            # javascript code that sets an initial markdown cell in every new notebook
+            js = """define(['base/js/namespace'], function(Jupyter)
+                    {{
+                        function onload()
                         {{
-                            function onload()
+                            if (Jupyter.notebook.get_cells().length ===1)
                             {{
-                                if (Jupyter.notebook.get_cells().length ===1)
-                                {{
-                                    Jupyter.notebook.insert_cell_above('markdown').set_text(`{}`);
-                                    Jupyter.notebook.get_cell(0).render();
-                                }}
-                                console.log("interview kernel.js loaded")
+                                Jupyter.notebook.insert_cell_above('markdown').set_text(`{}`);
+                                Jupyter.notebook.insert_cell_above('code').set_text('nonsense');
+                                Jupyter.notebook.get_cell(0).render();
+                                Jupyter.notebook.get_cell(1).execute();
+                                Jupyter.notebook.get_cell(1).set_text('');
+                                Jupyter.notebook.get_cell(1).metadata.hide_input = true;
+                                
+                                
                             }}
-                            return {{
-                                onload: onload
-                            }};
-                        }});""".format(interview.my_markdown_greeting.replace("`", "\\`"))
+                            console.log("interview kernel.js loaded")
+                        }}
+                        return {{
+                            onload: onload
+                        }};
+                    }});""".format(interview.my_markdown_greeting.replace("`", "\\`"))
 
-                f.write(js)
+            f.write(js)
                 # print(js)
 
-        except Exception:
-            print('could not copy kernel.js, will not see initial message in notebook')
+        # except Exception:
+        #     print('could not copy kernel.js, will not see initial message in notebook')
 
         print("Installing Jupyter kernel spec")
         KernelSpecManager().install_kernel_spec(td, 'Interview', user=user, prefix=prefix)

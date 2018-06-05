@@ -2,7 +2,7 @@ from os.path import join
 #from pathlib import Path
 
 from metakernel import MetaKernel
-from IPython.display import HTML, Javascript
+from IPython.display import HTML, Javascript, display
 from metakernel import IPythonKernel
 import ipywidgets as widgets
 
@@ -12,11 +12,21 @@ from pylatexenc.latex2text import LatexNodes2Text
 import getpass
 from bokeh.io import output_notebook
 
+from .widget_factory import WidgetFactory
 from . import pde_state_machine
 #import pde_state_machine
 from . import string_handling
 #import string_handling
 from distutils.util import strtobool
+
+from IPython.core import release
+from ipython_genutils.py3compat import builtin_mod, PY3, unicode_type, safe_unicode
+from IPython.utils.tokenutil import token_at_cursor, line_at_cursor
+from traitlets import Instance, Type, Any, List, Bool
+from ipykernel.kernelbase import Kernel
+from ipykernel.comm import CommManager
+import ipywidgets as widgets
+from ipykernel.zmqshell import ZMQInteractiveShell
 
 
 """This is a Jupyter kernel derived from MetaKernel. To use it, install it with the install.py script and run 
@@ -24,6 +34,27 @@ from distutils.util import strtobool
 
 
 class Interview(MetaKernel):
+    shell = Instance('IPython.core.interactiveshell.InteractiveShellABC',
+                     allow_none=True)
+    shell_class = Type(ZMQInteractiveShell)
+
+    use_experimental_completions = Bool(True,
+                                        help="Set this flag to False to deactivate the use of experimental IPython completion APIs.",
+                                        ).tag(config=True)
+
+    user_module = Any()
+
+    def _user_module_changed(self, name, old, new):
+        if self.shell is not None:
+            self.shell.user_module = new
+
+    user_ns = Instance(dict, args=None, allow_none=True)
+
+    def _user_ns_changed(self, name, old, new):
+        if self.shell is not None:
+            self.shell.user_ns = new
+            self.shell.init_user_ns()
+
 
     implementation = 'Interview'
     implementation_version = '1.0'
@@ -43,8 +74,6 @@ Let's set up a model and simulation.
 To see a recap of what we know so far, enter `recap <optional keyword>`. 
 To interactively visualize the current theory graph, enter `tgwiev` or `tgview mpd`. 
 Otherwise, you can always answer with \LaTeX-type input.
-
-
 """
     #To get explanations, enter `explain <optional keyword>`.
     #You can inspect the currently loaded MMT theories under http://localhost:43397  #TODO
@@ -65,18 +94,42 @@ Otherwise, you can always answer with \LaTeX-type input.
         self.state_machine, self.my_markdown_greeting = self.set_initial_message(install_run)
         self.toggle_button_counter = 0
 
+        # Initialize the InteractiveShell subclass
+        self.shell = self.shell_class.instance(parent=self,
+                                               profile_dir=self.profile_dir,
+                                               user_module=self.user_module,
+                                               user_ns=self.user_ns,
+                                               kernel=self,
+                                               )
+        self.shell.displayhook.session = self.session
+        self.shell.displayhook.pub_socket = self.iopub_socket
+        self.shell.displayhook.topic = self._topic('execute_result')
+        self.shell.display_pub.session = self.session
+        self.shell.display_pub.pub_socket = self.iopub_socket
+
+        self.comm_manager = CommManager(parent=self, kernel=self)
+
+        self.shell.configurables.append(self.comm_manager)
+        comm_msg_types = ['comm_open', 'comm_msg', 'comm_close']
+        for msg_type in comm_msg_types:
+            self.shell_handlers[msg_type] = getattr(
+                self.comm_manager, msg_type)
+
+        self.widget_factory = WidgetFactory()
+
         self.update_prompt()
         # bokeh notebook setup
-        output_notebook()
+        # output_notebook()
 
     def set_initial_message(self, install_run=False):
         # set it up -- without server communication capabilities if we are just installing
-        self.state_machine = pde_state_machine.PDE_States(self.poutput, self.update_prompt, self.please_prompt,
+        self.state_machine = pde_state_machine.PDE_States(self.poutput, self.update_prompt,
                                                      self.display_html, install_run, self.toggle_show_button)
         # already send some input to state machine, to capture initial output and have it displayed via kernel.js
         # /  not displayed in the real thing
         self.state_machine.handle_state_dependent_input("anything")   # TODO compatibility with not-notebook?
-        my_markdown_greeting = Interview.banner + self.poutstring
+        # my_markdown_greeting = Interview.banner + self.poutstring
+        my_markdown_greeting = str(Interview.banner) + self.poutstring
         self.poutstring = ""
         return self.state_machine, my_markdown_greeting
 
@@ -116,36 +169,8 @@ Otherwise, you can always answer with \LaTeX-type input.
 
         return  # stream_content['text']
 
-    def please_prompt(self, query, if_yes, if_no=None, pass_other=False):
-        self.poutput(str(query)) # + " [y/n]? ")
-        self.state_machine.prompted = True
-        self.state_machine.if_yes = if_yes
-        self.state_machine.if_no = if_no
-        self.state_machine.pass_other = pass_other
-        self.display_widget()
 
     def prompt_input_handling(self, arg):  # TODO make this widget-ed
-        """ If we asked for a yes-no answer, execute what was specified in please_prompt.
-        return true if the input was handled here, and false if not."""
-        if self.state_machine.prompted:
-            if arg == "":
-                ret = True
-            else:
-                try:
-                    ret = strtobool(str(arg).strip().lower())
-                except ValueError:
-                    if self.state_machine.pass_other:
-                        return False
-                    # or use as input to callback an input processing fcn..?
-                    self.poutput("Please answer with y/n")
-                    return True
-            self.state_machine.prompted = False
-            if ret:
-                if self.state_machine.if_yes is not None:
-                    self.state_machine.if_yes()
-            elif self.state_machine.if_no is not None:
-                self.state_machine.if_no()
-            return True
         return False
 
     def keyword_handling(self, arg):
@@ -309,32 +334,29 @@ Otherwise, you can always answer with \LaTeX-type input.
         self.display_html(code)
         # print(tgview_url)
 
-    def display_widget(self):
-        # needs jupyter nbextension enable --py widgetsnbextension
-        from IPython.display import display
-        from IPython.core.formatters import IPythonDisplayFormatter
-        w = widgets.ToggleButton(
-            value=False,
-            description='Click me',
-            disabled=False,
-            button_style='', # 'success', 'info', 'warning', 'danger' or ''
-            tooltip='Description',
-            icon='check'
-        )
-        f = IPythonDisplayFormatter()
-        # these should all do it, but all return the same string
-        #f(w) # = "ToggleButton(value=False, description='Click me', icon='check', tooltip='Description')"
-        #self._ipy_formatter(w)  # = "
-        #display(w) # = "
-        # self.Display(w)  # = "
-        widgets.ToggleButton(
-            value=False,
-            description='Click me',
-            disabled=False,
-            button_style='',  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip='Description',
-            icon='check'
-        )
+    def start(self):
+        self.shell.exit_now = False
+        super(Interview, self).start()
+
+    def set_parent(self, ident, parent):
+        """Overridden from parent to tell the display hook and output streams
+        about the parent message.
+        """
+        super(Interview, self).set_parent(ident, parent)
+        self.shell.set_parent(parent)
+
+    def init_metadata(self, parent):
+        """Initialize metadata.
+        Run at the beginning of each execution request.
+        """
+        md = super(Interview, self).init_metadata(parent)
+        # FIXME: remove deprecated ipyparallel-specific code
+        # This is required for ipyparallel < 5.0
+        md.update({
+            'dependencies_met': True,
+            'engine': self.ident,
+        })
+        return md
 
 
 if __name__ == '__main__':

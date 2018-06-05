@@ -4,6 +4,11 @@
 from transitions import Machine, State
 from collections import OrderedDict
 
+from IPython.display import display
+from .widget_factory import WidgetFactory
+
+from ipywidgets import widgets
+
 import getpass
 import re
 from html import escape
@@ -68,16 +73,17 @@ class CriticalSubdict():
 class PDE_States:
     """A state machine using pytranisitions that walks our theory graph and creates ephemeral theories and views"""
 
-    def __init__(self, output_function, after_state_change_function, prompt_function, display_html_function=None,
+    def __init__(self, output_function, after_state_change_function, display_html_function=None,
                  install_run=False, toggle_show_button=None):
         # just act like we were getting the right replies from MMT
         self.cheating = True
 
         # callback handles
         self.poutput = output_function
-        self.please_prompt = prompt_function
         self.display_html = display_html_function
         self.toggle_show_button = toggle_show_button
+
+        self.widget_factory = WidgetFactory()
 
         # Initialize a state machine
         self.states = [
@@ -197,6 +203,25 @@ class PDE_States:
         self.if_no = None
         self.pass_other = False
 
+    def please_prompt(self, query,if_yes, if_no = None, pass_other=False):
+        def update(dict):
+            if dict['new']:
+                if if_yes:
+                    if_yes()
+                else:
+                    pass
+            else:
+                if if_no:
+                    if_no()
+                else:
+                    pass
+
+        prompt = self.widget_factory.createToggleButtons()
+        prompt.observe(update,'value')
+        display(prompt)
+        self.pass_other = pass_other
+
+
     def handle_state_dependent_input(self, userstring):
         """The standard input handling, depending on which state we are in"""
         # pythonic switch-case, cf. https://bytebaker.com/2008/11/03/switch-case-statement-in-python/
@@ -210,30 +235,26 @@ class PDE_States:
         self.greeting_over()
 
     def greeting_exit(self):
-        # username = getpass.getuser()
-        # self.poutput("Hello, " + username + "! I am MoSIS, your partial differential equations and simulations expert. "
-        #              "Let's set up a simulation together.")
-        # self.poutput("")
-        # self.poutput("To get explanations, enter \"explain <optional keyword>\". ")
-        # self.poutput("To see a recap of what we know so far, enter \"recap <optional keyword>\". ")
-        # self.poutput("To interactively visualize ther current theory graph, enter \"tgwiev <optional theory name>\". ")
-        # self.poutput("Otherwise, you can always try and use LaTeX-type input.")
-        # self.poutput("")
-        # self.poutput("You can inspect the currently loaded MMT theories under " + self.mmtinterface.serverInstance)
-        # self.poutput("")
-        return
+        pass
 
     ##### for state dimensions
     def dimensions_begin(self):
         self.print_subheading("Modeling")
         self.poutput("How many dimensions does your model have?")
         self.print_empty_line()
-        self.poutput("I am just assuming it's 1, since that is all we can currently handle.")  # TODO
-        self.print_empty_line()
         self.simdata["num_dimensions"] = 1
-        self.dimensions_parsed()
 
-    def dimensions_handle_input(self, userstring):
+    def dimensions_handle_input(self,userstring):
+        out = widgets.HTML()
+        def update(dict):
+            if self.do_dimensions_handle_input(dict['new'],out):
+                dict['owner'].disabled = True
+        buttons = widgets.ToggleButtons(options=[1,2,3,4],value = None)
+        buttons.observe(update,'value')
+        display(buttons,out)
+        self.do_dimensions_handle_input(userstring,out)
+
+    def do_dimensions_handle_input(self, userstring, out = None):
         # reply_diffops = self.mmtinterface.query_for("mDifferentialOperators")
         # self.poutput(reply_diffops.tostring())
         # self.poutput(element_to_string(reply_diffops.getConstant("derivative")))
@@ -241,27 +262,54 @@ class PDE_States:
         try:
             numdim = int(userstring)
         except ValueError:
-            self.poutput("Please enter a number.")
+            out.value = "Please enter a number or select it with the buttons."
             return
         if numdim < 1:
             self.obviously_stupid_input()
-            ExaOutput(self.testsimdata)
+            ExaOutput(self.simdata)
             self.dimensions_begin()
         elif numdim == 1:  # or self.numdim == 2:
             self.simdata["num_dimensions"] = numdim
-            self.dimensions_parsed()
+            self.trigger('dimensions_parsed')
+            return True
         else:
-            self.poutput(
-                "Sorry, cannot handle " + str(numdim) + " dimensions as of now. Please try less than that.")
+            out.value = "Sorry, cannot handle " + str(numdim) + " dimensions as of now. Please try less than that."
 
     ##### for state domain
     def domain_begin(self):
-        self.poutput("What is the domain in your model?     Ω : type ❘ = [?;?], e.g. `\\\\Omega = [0.0;1.0]`")
-        # self.poutput("By the way, you can always try and use LaTeX-type input.")
+        display(widgets.HTML("What is the domain in your model? Please select it with the slider"))
         self.simdata[self.state]["axes"] = OrderedDict()
         self.domain_mmt_preamble()
+        self.domain_handle_input()
 
-    def domain_handle_input(self, userstring):
+    def domain_handle_input(self):
+        slider = self.widget_factory.createFloatRangeSlider(min = -0.1, max = 1.1, step = 0.1)
+        out = widgets.HTML()
+        def update_range(dict):
+            if dict['owner'].max == dict['new'][1]:
+                dict['owner'].max += dict['owner'].step
+            if dict['owner'].min == dict['new'][0]:
+                dict['owner'].min -= dict['owner'].step
+            
+            
+
+        slider.observe(update_range,'value')
+        button = widgets.Button(description = 'Ok')
+
+        def submit(button):
+            out = 'Ω = ['+str(slider.value[0])+';'+str(slider.value[1])+']'
+            display(widgets.HTML(out))
+            self.do_domain_handle_input(out)
+            slider.disabled = True
+            button.disabled = True
+
+        button.on_click(submit)
+        hbox = widgets.HBox([slider,button])
+        display(hbox,out)
+
+    
+    def do_domain_handle_input(self, userstring):
+        
         domain_name = string_handling.get_first_word(userstring)
         # subdict = self.simdata[self.state]
         with CriticalSubdict(self.simdata[self.state], self.poutput) as subdict:
@@ -276,9 +324,10 @@ class PDE_States:
             subdict["axes"]["x"] = "[" + str(fro) + ";" + str(to) + "]"
             (subdict["from"], subdict["to"]) = (fro, to)
 
-            self.poutput("we will just assume that the variable is called " + string_handling.get_first_key(subdict["axes"]) + " for now.")
+            display(widgets.HTML(value = "we will just assume that the variable is called " + string_handling.get_first_key(subdict["axes"]) + " for now."))
             # mmtreply = self.mmtinterface.mmt_new_decl(domain_name, subdict["theoryname"], "x : " + domain_name)
             self.trigger('domain_parsed')
+
 
     def domain_exit(self):
         self.domain_mmt_postamble()
@@ -314,8 +363,9 @@ class PDE_States:
 
     ##### for state unknowns
     def unknowns_begin(self):
-        self.poutput("Which function(s) are you looking for? / What are the unknowns in your model?  u : " +
+        out = widgets.HTML(value = "Which function(s) are you looking for? / What are the unknowns in your model?  u : " +
                      self.simdata["domain"]["name"] + " ⟶ ??,  e.g., u : " + self.simdata["domain"]["name"] + " ⟶ ℝ ?")
+        display(out)
         self.simdata["unknowns"] = OrderedDict()
 
     def unknowns_handle_input(self, userstring):
@@ -357,7 +407,7 @@ class PDE_States:
                 self.new_view(subdict)
                 self.mmtinterface.mmt_new_decl("codomain", subdict["viewname"], "ucodomain = " + subdict["codomain"])
                 self.mmtinterface.mmt_new_decl("unktype", subdict["viewname"], "unknowntype = myUnkType")
-                self.poutput("Ok, " + userstring)
+                display(widgets.HTML(value = "Ok, " + userstring))
                 # self.please_prompt("Are these all the unknowns?", lambda: self.trigger('unknowns_parsed'), pass_other=True) #TODO
                 self.trigger('unknowns_parsed')
 
@@ -371,10 +421,19 @@ class PDE_States:
     ##### for state parameters
     def parameters_begin(self):
         self.print_empty_line()
-        self.poutput(
-            "Would you like to name additional parameters like constants or functions (that are independent of your \
+        out = widgets.HTML(value = "Would you like to name additional parameters like constants or functions (that are independent of your \
             unknowns)?  c : ℝ = ? or f : Ω ⟶ ℝ = ?, e.g. `k = x \\cdot x`")  # ℝ
+        display(out)
         self.simdata["parameters"] = OrderedDict()
+        ynbutton = widgets.ToggleButtons(options = ['Yes','No'],value = None)
+        def skip_parameters(dict):
+            if dict['new'] == 'No':
+                ynbutton.disabled = True
+                self.trigger('parameters_parsed')
+            else:
+                display(widgets.HTML(value= 'Please state them in the input field below'))
+        ynbutton.observe(skip_parameters,'value')
+        display(ynbutton)
 
     def parameters_handle_input(self, userstring):
         # self.poutput ("parameterinput "+ userstring)
@@ -432,8 +491,7 @@ class PDE_States:
 
     ##### for state pdes
     def pdes_begin(self):
-        self.poutput(
-            "Let's talk about your partial differential equation(s). What do they look like? e.g. `Δu = 0.0` ?")
+        display(widgets.HTML(value =  "Let's talk about your partial differential equation(s). What do they look like? e.g. `Δu = 0.0` ?"))
         self.simdata["pdes"]["pdes"] = []
 
     def pdes_handle_input(self, userstring):
@@ -721,8 +779,7 @@ class PDE_States:
         self.recap()
         self.print_subheading("Solving")
         self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils? "
-                           "If yes, you can provide a configuration name, or we'll just use your name.",
-                           if_yes=self.sim_ok_fd, if_no=None, pass_other=True)
+                           "If yes, you can provide a configuration name, or we'll just use your name.", pass_other=True)
 
     def sim_handle_input(self, userstring):
         self.sim_exit(userstring)
