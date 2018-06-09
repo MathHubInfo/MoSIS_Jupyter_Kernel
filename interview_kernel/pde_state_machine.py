@@ -17,6 +17,8 @@ from . import string_handling
 from .exaoutput import ExaOutput, ExaRunner
 from .mmtinterface import *
 
+from pylatexenc.latex2text import LatexNodes2Text
+
 from bokeh.io import output_notebook, show, export_svgs
 from bokeh.plotting import figure
 from bokeh.resources import CDN
@@ -203,24 +205,6 @@ class PDE_States:
         self.if_no = None
         self.pass_other = False
 
-    def please_prompt(self, query,if_yes, if_no = None, pass_other=False):
-        def update(dict):
-            if dict['new']:
-                if if_yes:
-                    if_yes()
-                else:
-                    pass
-            else:
-                if if_no:
-                    if_no()
-                else:
-                    pass
-
-        prompt = self.widget_factory.createToggleButtons()
-        prompt.observe(update,'value')
-        display(prompt)
-        self.pass_other = pass_other
-
 
     def handle_state_dependent_input(self, userstring):
         """The standard input handling, depending on which state we are in"""
@@ -283,8 +267,7 @@ class PDE_States:
         self.domain_handle_input()
 
     def domain_handle_input(self):
-        slider = self.widget_factory.createFloatRangeSlider(min = -0.1, max = 1.1, step = 0.1)
-        out = widgets.HTML()
+        slider = widgets.FloatRangeSlider(min = -0.1, max = 1.1, step = 0.1, value = [0.0,1.0])
         def update_range(dict):
             if dict['owner'].max == dict['new'][1]:
                 dict['owner'].max += dict['owner'].step
@@ -295,11 +278,10 @@ class PDE_States:
 
         slider.observe(update_range,'value')
         button = widgets.Button(description = 'Ok')
-
+        out = widgets.HTML()
         def submit(button):
-            out = 'Ω = ['+str(slider.value[0])+';'+str(slider.value[1])+']'
-            display(widgets.HTML(out))
-            self.do_domain_handle_input(out)
+            out.value = 'Ω = ['+str(slider.value[0])+';'+str(slider.value[1])+']'
+            self.do_domain_handle_input(out.value)
             slider.disabled = True
             button.disabled = True
 
@@ -426,21 +408,36 @@ class PDE_States:
         display(out)
         self.simdata["parameters"] = OrderedDict()
         ynbutton = widgets.ToggleButtons(options = ['Yes','No'],value = None)
-        def skip_parameters(dict):
+        def handle_parameters(dict):
             if dict['new'] == 'No':
                 ynbutton.disabled = True
                 self.trigger('parameters_parsed')
             else:
-                display(widgets.HTML(value= 'Please state them in the input field below'))
-        ynbutton.observe(skip_parameters,'value')
+                display(widgets.HTML(value= 'Please state them in the input fields below and submit using the button'))
+                t1 = widgets.Text(value = 'k = x \cdot x')
+                t2 = widgets.Text(value = 'l = x - x')
+                t3 = widgets.Text(value = 'm = x + x')
+                text_boxes = [t1,t2,t3]
+                vbox = widgets.VBox(text_boxes)
+                button = widgets.Button(description = 'Ok')
+                hbox = widgets.HBox([vbox,button])
+
+                def submit(dict):
+                    for textbox in text_boxes:
+                        if textbox.value:
+                            self.parameters_handle_input(string_handling.replace_times_to_cdot(LatexNodes2Text().latex_to_text(textbox.value)).strip())
+                            textbox.disabled = True
+                    button.disabled = True
+                    self.trigger('parameters_parsed')
+
+                button.on_click(submit)
+
+                display(hbox)
+
+        ynbutton.observe(handle_parameters,'value')
         display(ynbutton)
 
     def parameters_handle_input(self, userstring):
-        # self.poutput ("parameterinput "+ userstring)
-        if string_handling.means_no(userstring):
-            self.trigger('parameters_parsed')
-            return
-
         parameter_name = string_handling.get_first_word(userstring)
         with CriticalSubdict(self.simdata["parameters"], self.poutput) as psubdict:
             psubdict[parameter_name] = {}
@@ -480,8 +477,8 @@ class PDE_States:
                                                "param = " + parameter_name)
                 self.poutput("Ok, " + parsestring)
                 self.print_empty_line()
-                self.please_prompt("Would you like to declare more parameters?", None,
-                                   lambda: self.trigger('parameters_parsed'), True)
+                # ("Would you like to declare more parameters?", None,
+                # lambda: self.trigger('parameters_parsed'), True)
 
     def parameters_exit(self):
         # print(str(self.simdata["parameters"]))
@@ -491,7 +488,7 @@ class PDE_States:
 
     ##### for state pdes
     def pdes_begin(self):
-        display(widgets.HTML(value =  "Let's talk about your partial differential equation(s). What do they look like? e.g. `Δu = 0.0` ?"))
+        display(widgets.HTML(value =  "Let's talk about your partial differential equation(s). What do they look like? e.g. Δu = 0.0 ?"))
         self.simdata["pdes"]["pdes"] = []
 
     def pdes_handle_input(self, userstring):
@@ -572,7 +569,16 @@ class PDE_States:
                 # => can assume each to be ==1 for now
                 numpdesgiven = len(self.simdata["pdes"]["pdes"])
                 # self.poutput("Ok, this is what this looks like in omdoc: " + reply.tostring())
-                self.toggle_show_button("Show PDE as omdoc", escape(reply.tostring())) #TODO
+                self.toggle_show_button("Show PDE as omdoc", escape(reply.tostring() )) #TODO
+                button = widgets.Button(description = 'Save')
+                def save(button):
+                    f = open("PDE_as_omdoc.txt","w+")
+                    f.write(escape(reply.tostring() ))
+                    f.close()
+
+                button.on_click(save)
+                display(button)
+
                 if numpdesgiven == len(self.simdata["unknowns"]):
                     self.trigger('pdes_parsed')
                 elif numpdesgiven > len(self.simdata["unknowns"]):
@@ -778,8 +784,16 @@ class PDE_States:
     def sim_begin(self):
         self.recap()
         self.print_subheading("Solving")
-        self.please_prompt("Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils? "
-                           "If yes, you can provide a configuration name, or we'll just use your name.", pass_other=True)
+        display(widgets.HTML( value = "Would you like to try and solve the PDE using the Finite Difference Method in ExaStencils?"))
+        button = widgets.ToggleButtons(options = ['Yes','No'],value = None)
+        def submit(dict):
+            if dict['new'] == 'Yes':
+                self.sim_exit()
+            else:
+                display(widgets.HTML(value = "Then we're done here I guess?"))
+        button.observe(submit,'value')
+        display(button)
+
 
     def sim_handle_input(self, userstring):
         self.sim_exit(userstring)
