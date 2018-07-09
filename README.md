@@ -27,6 +27,6 @@ can be found in mathhub archives
 
 To start the server in the MMT Shell::
 
-    server on port 9000
+    server on 9000
     extension info.kwarc.mmt.interviews.InterviewServer
     extension info.kwarc.mmt.api.ontology.RelationalReader
